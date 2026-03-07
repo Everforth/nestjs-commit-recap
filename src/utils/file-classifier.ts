@@ -2,6 +2,7 @@ import type { MiddlewareType } from '../types/index.js';
 
 export type FileType =
   | 'entity'
+  | 'dto'
   | 'module'
   | 'controller'
   | 'service'
@@ -22,6 +23,9 @@ export function classifyFile(filePath: string): FileType {
 
   if (fileName.endsWith('.entity.ts')) {
     return 'entity';
+  }
+  if (fileName.endsWith('.dto.ts')) {
+    return 'dto';
   }
   if (fileName.endsWith('.module.ts')) {
     return 'module';

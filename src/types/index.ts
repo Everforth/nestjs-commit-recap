@@ -30,6 +30,25 @@ export interface EntityChange {
   relatedPRs: PRInfo[];
 }
 
+export interface DTOProperty {
+  name: string;
+  type: string;
+  nullable?: boolean;
+  decorators: string[];  // ['IsString', 'MinLength(5)']
+}
+
+export interface DTOChange {
+  file: string;
+  oldFile?: string;  // 移動元のパス（moved の場合）
+  className: string;
+  changeType: ChangeType;
+  properties: {
+    before: DTOProperty[];
+    after: DTOProperty[];
+  };
+  relatedPRs: PRInfo[];
+}
+
 export interface EndpointInfo {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   path: string;
@@ -113,6 +132,7 @@ export interface AnalysisResult {
   startDate: string;
   endDate: string;
   entities: EntityChange[];
+  dtos: DTOChange[];
   controllers: ControllerChange[];
   modules: ModuleChange[];
   providers: ProviderChange[];
