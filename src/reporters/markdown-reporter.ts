@@ -1,12 +1,14 @@
 import type {
   AnalysisResult,
   EntityChange,
+  DTOChange,
   ControllerChange,
   ModuleChange,
   ProviderChange,
   MiddlewareChange,
   EntityColumn,
   EntityRelation,
+  DTOProperty,
   EndpointInfo,
 } from '../types/index.js';
 import type { PRInfo } from '../git/pr-fetcher.js';
@@ -32,6 +34,10 @@ export class MarkdownReporter {
       lines.push(...this.generateEntityDetails(filteredResult.entities));
     }
 
+    if (filteredResult.dtos.length > 0) {
+      lines.push(...this.generateDTODetails(filteredResult.dtos));
+    }
+
     if (filteredResult.controllers.length > 0) {
       lines.push(...this.generateControllerDetails(filteredResult.controllers));
     }
@@ -55,6 +61,7 @@ export class MarkdownReporter {
     return {
       ...result,
       entities: this.filterEntityMoves(result.entities),
+      dtos: this.filterDTOMoves(result.dtos),
       controllers: this.filterControllerMoves(result.controllers),
       providers: this.filterProviderMoves(result.providers),
       middlewares: this.filterMiddlewareMoves(result.middlewares),
@@ -114,6 +121,39 @@ export class MarkdownReporter {
         e.changeType === 'moved'
       ),
       ...movedEntities,
+    ];
+  }
+
+  private filterDTOMoves(dtos: DTOChange[]): DTOChange[] {
+    const added = dtos.filter(d => d.changeType === 'added');
+    const deleted = dtos.filter(d => d.changeType === 'deleted');
+
+    const movedClassNames = new Set<string>();
+    const movedDTOs: DTOChange[] = [];
+
+    for (const add of added) {
+      const del = deleted.find(d => d.className === add.className);
+      if (del) {
+        movedClassNames.add(add.className);
+        movedDTOs.push({
+          ...add,
+          oldFile: del.file,
+          changeType: 'moved',
+          properties: {
+            before: del.properties.before,
+            after: add.properties.after,
+          },
+          relatedPRs: [...del.relatedPRs, ...add.relatedPRs],
+        });
+      }
+    }
+
+    return [
+      ...dtos.filter(d =>
+        !movedClassNames.has(d.className) ||
+        d.changeType === 'moved'
+      ),
+      ...movedDTOs,
     ];
   }
 
@@ -230,6 +270,73 @@ export class MarkdownReporter {
           }
           if (deletedRelations.length > 0) {
             changes.push(`-${deletedRelations.length} relations: ${deletedRelations.join(', ')}`);
+          }
+
+          if (changes.length > 0) {
+            content += ` (${changes.join(', ')})`;
+          }
+        }
+
+        lines.push(`| ${symbol} | ${content} |`);
+      }
+      lines.push('');
+    }
+
+    // DTO サマリー（削除のみは除外、変更がないものも除外）
+    const dtosToShow = result.dtos.filter(dto => {
+      if (dto.changeType === 'deleted') return false;
+      if (dto.changeType === 'added') return true;
+      if (dto.changeType === 'moved') return true;
+      const addedProps = this.getAddedProperties(dto);
+      const deletedProps = this.getDeletedProperties(dto);
+      const modifiedProps = this.getModifiedProperties(dto);
+      return addedProps.length > 0 || deletedProps.length > 0 || modifiedProps.length > 0;
+    });
+    if (dtosToShow.length > 0) {
+      lines.push('### DTO');
+      lines.push('|   | 内容 |');
+      lines.push('|---|------|');
+      for (const dto of dtosToShow) {
+        const symbol = this.getChangeSymbol(dto.changeType);
+        let content = `\`${dto.className}\``;
+
+        if (dto.changeType === 'moved') {
+          const oldDir = dto.oldFile ? this.getDirectory(dto.oldFile) : '';
+          const newDir = this.getDirectory(dto.file);
+          content += ` (${oldDir} → ${newDir})`;
+
+          const changes: string[] = [];
+          const addedProps = this.getAddedProperties(dto);
+          const deletedProps = this.getDeletedProperties(dto);
+          const modifiedProps = this.getModifiedProperties(dto);
+
+          if (addedProps.length > 0) {
+            changes.push(`+${addedProps.length} props`);
+          }
+          if (deletedProps.length > 0) {
+            changes.push(`-${deletedProps.length} props`);
+          }
+          if (modifiedProps.length > 0) {
+            changes.push(`~${modifiedProps.length} props`);
+          }
+
+          if (changes.length > 0) {
+            content += ` [${changes.join(', ')}]`;
+          }
+        } else if (dto.changeType === 'modified') {
+          const changes: string[] = [];
+          const addedProps = this.getAddedProperties(dto);
+          const deletedProps = this.getDeletedProperties(dto);
+          const modifiedProps = this.getModifiedProperties(dto);
+
+          if (addedProps.length > 0) {
+            changes.push(`+${addedProps.length} props: ${addedProps.join(', ')}`);
+          }
+          if (deletedProps.length > 0) {
+            changes.push(`-${deletedProps.length} props: ${deletedProps.join(', ')}`);
+          }
+          if (modifiedProps.length > 0) {
+            changes.push(`~${modifiedProps.length} props: ${modifiedProps.join(', ')}`);
           }
 
           if (changes.length > 0) {
@@ -391,6 +498,109 @@ export class MarkdownReporter {
     }
 
     return lines;
+  }
+
+  private generateDTODetails(dtos: DTOChange[]): string[] {
+    // 削除のみ・変更なしのDTOをフィルタリング
+    const dtosToShow = dtos.filter(dto => {
+      if (dto.changeType === 'deleted') return false;
+      if (dto.changeType === 'added') return true;
+      if (dto.changeType === 'moved') return true;
+      const allProperties = this.mergeProperties(dto.properties.before, dto.properties.after);
+      const changedProperties = allProperties.filter(prop => prop.changeType !== 'unchanged');
+      return changedProperties.length > 0;
+    });
+
+    if (dtosToShow.length === 0) {
+      return [];
+    }
+
+    const lines: string[] = [];
+    lines.push('## DTO の変更');
+    lines.push('');
+
+    for (const dto of dtosToShow) {
+      const fileName = dto.file.split('/').pop() ?? dto.file;
+      lines.push(`### ${fileName}`);
+
+      // 移動の場合、移動元パスを表示
+      if (dto.changeType === 'moved' && dto.oldFile) {
+        lines.push(`> 移動: \`${dto.oldFile}\` → \`${dto.file}\``);
+        lines.push('');
+      }
+
+      const allProperties = this.mergeProperties(dto.properties.before, dto.properties.after);
+
+      if (allProperties.length > 0) {
+        lines.push('#### Properties');
+        lines.push('|   | Property | 型 | Decorators |');
+        lines.push('|---|----------|-----|-----------|');
+
+        for (const prop of allProperties) {
+          const symbol = prop.changeType === 'added' ? '+' :
+                        prop.changeType === 'deleted' ? '-' :
+                        prop.changeType === 'modified' ? '~' : '';
+          const type = prop.after?.type ?? prop.before?.type ?? '';
+          const decorators = prop.after?.decorators.join(', ') ?? prop.before?.decorators.join(', ') ?? '';
+          lines.push(`| ${symbol} | ${prop.name} | ${type} | ${decorators} |`);
+        }
+        lines.push('');
+      }
+
+      if (dto.relatedPRs.length > 0) {
+        lines.push(this.formatRelatedPRs(dto.relatedPRs));
+        lines.push('');
+      }
+
+      lines.push('---');
+      lines.push('');
+    }
+
+    return lines;
+  }
+
+  private mergeProperties(
+    before: DTOProperty[],
+    after: DTOProperty[]
+  ): Array<{
+    name: string;
+    changeType: 'added' | 'deleted' | 'modified' | 'unchanged';
+    before?: DTOProperty;
+    after?: DTOProperty;
+  }> {
+    const result: Array<{
+      name: string;
+      changeType: 'added' | 'deleted' | 'modified' | 'unchanged';
+      before?: DTOProperty;
+      after?: DTOProperty;
+    }> = [];
+
+    const beforeMap = new Map(before.map(p => [p.name, p]));
+    const afterMap = new Map(after.map(p => [p.name, p]));
+    const allNames = new Set([...beforeMap.keys(), ...afterMap.keys()]);
+
+    for (const name of allNames) {
+      const b = beforeMap.get(name);
+      const a = afterMap.get(name);
+
+      if (!b && a) {
+        result.push({ name, changeType: 'added', after: a });
+      } else if (b && !a) {
+        result.push({ name, changeType: 'deleted', before: b });
+      } else if (b && a) {
+        const changed = b.type !== a.type ||
+                       b.nullable !== a.nullable ||
+                       b.decorators.join(',') !== a.decorators.join(',');
+        result.push({
+          name,
+          changeType: changed ? 'modified' : 'unchanged',
+          before: b,
+          after: a,
+        });
+      }
+    }
+
+    return result;
   }
 
   private mergeRelations(
@@ -651,6 +861,34 @@ export class MarkdownReporter {
     return entity.relations.before
       .filter(r => !afterNames.has(r.name))
       .map(r => r.name);
+  }
+
+  private getAddedProperties(dto: DTOChange): string[] {
+    const beforeNames = new Set(dto.properties.before.map(p => p.name));
+    return dto.properties.after
+      .filter(p => !beforeNames.has(p.name))
+      .map(p => p.name);
+  }
+
+  private getDeletedProperties(dto: DTOChange): string[] {
+    const afterNames = new Set(dto.properties.after.map(p => p.name));
+    return dto.properties.before
+      .filter(p => !afterNames.has(p.name))
+      .map(p => p.name);
+  }
+
+  private getModifiedProperties(dto: DTOChange): string[] {
+    const beforeMap = new Map(dto.properties.before.map(p => [p.name, p]));
+    const result: string[] = [];
+    for (const after of dto.properties.after) {
+      const before = beforeMap.get(after.name);
+      if (before && (before.type !== after.type ||
+                     before.nullable !== after.nullable ||
+                     before.decorators.join(',') !== after.decorators.join(','))) {
+        result.push(after.name);
+      }
+    }
+    return result;
   }
 
   private getEndpointChanges(controllers: ControllerChange[]): Array<{
