@@ -838,7 +838,7 @@ export class MarkdownReporter {
 
   private formatRelatedPRs(prs: PRInfo[]): string {
     if (prs.length === 0) return '';
-    const links = prs.map(pr => `[#${pr.number}](${pr.url}) ${pr.title}`).join(', ');
+    const links = prs.map(pr => `[#${pr.number}](${pr.url})`).join(', ');
     return `**関連PR**: ${links}`;
   }
 
