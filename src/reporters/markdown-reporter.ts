@@ -3,6 +3,7 @@ import type {
   EntityChange,
   DTOChange,
   EnumChange,
+  InterfaceChange,
   ControllerChange,
   ModuleChange,
   ProviderChange,
@@ -11,6 +12,7 @@ import type {
   EntityRelation,
   DTOProperty,
   EnumMember,
+  InterfaceProperty,
   EndpointInfo,
 } from '../types/index.js';
 import type { PRInfo } from '../git/pr-fetcher.js';
@@ -44,6 +46,10 @@ export class MarkdownReporter {
       lines.push(...this.generateEnumDetails(filteredResult.enums));
     }
 
+    if (filteredResult.interfaces.length > 0) {
+      lines.push(...this.generateInterfaceDetails(filteredResult.interfaces));
+    }
+
     if (filteredResult.controllers.length > 0) {
       lines.push(...this.generateControllerDetails(filteredResult.controllers));
     }
@@ -69,6 +75,7 @@ export class MarkdownReporter {
       entities: this.filterEntityMoves(result.entities),
       dtos: this.filterDTOMoves(result.dtos),
       enums: this.filterEnumMoves(result.enums),
+      interfaces: this.filterInterfaceMoves(result.interfaces),
       controllers: this.filterControllerMoves(result.controllers),
       providers: this.filterProviderMoves(result.providers),
       middlewares: this.filterMiddlewareMoves(result.middlewares),
@@ -194,6 +201,43 @@ export class MarkdownReporter {
         e.changeType === 'moved'
       ),
       ...movedEnums,
+    ];
+  }
+
+  private filterInterfaceMoves(interfaces: InterfaceChange[]): InterfaceChange[] {
+    const added = interfaces.filter(i => i.changeType === 'added');
+    const deleted = interfaces.filter(i => i.changeType === 'deleted');
+
+    const movedInterfaceNames = new Set<string>();
+    const movedInterfaces: InterfaceChange[] = [];
+
+    for (const add of added) {
+      const del = deleted.find(d => d.interfaceName === add.interfaceName);
+      if (del) {
+        movedInterfaceNames.add(add.interfaceName);
+        movedInterfaces.push({
+          ...add,
+          oldFile: del.file,
+          changeType: 'moved',
+          properties: {
+            before: del.properties.before,
+            after: add.properties.after,
+          },
+          extendsInterfaces: {
+            before: del.extendsInterfaces.before,
+            after: add.extendsInterfaces.after,
+          },
+          relatedPRs: [...del.relatedPRs, ...add.relatedPRs],
+        });
+      }
+    }
+
+    return [
+      ...interfaces.filter(i =>
+        !movedInterfaceNames.has(i.interfaceName) ||
+        i.changeType === 'moved'
+      ),
+      ...movedInterfaces,
     ];
   }
 
@@ -444,6 +488,99 @@ export class MarkdownReporter {
           }
           if (modifiedMembers.length > 0) {
             changes.push(`~${modifiedMembers.length} members: ${modifiedMembers.join(', ')}`);
+          }
+
+          if (changes.length > 0) {
+            content += ` (${changes.join(', ')})`;
+          }
+        }
+
+        lines.push(`| ${symbol} | ${content} |`);
+      }
+      lines.push('');
+    }
+
+    // Interface サマリー（削除のみは除外、変更がないものも除外）
+    const interfacesToShow = result.interfaces.filter(interfaceChange => {
+      if (interfaceChange.changeType === 'deleted') return false;
+      if (interfaceChange.changeType === 'added') return true;
+      if (interfaceChange.changeType === 'moved') return true;
+      const addedProps = this.getAddedInterfaceProperties(interfaceChange);
+      const deletedProps = this.getDeletedInterfaceProperties(interfaceChange);
+      const modifiedProps = this.getModifiedInterfaceProperties(interfaceChange);
+      const extendsChanged = interfaceChange.extendsInterfaces.before.join(',') !==
+                             interfaceChange.extendsInterfaces.after.join(',');
+      return addedProps.length > 0 || deletedProps.length > 0 || modifiedProps.length > 0 || extendsChanged;
+    });
+    if (interfacesToShow.length > 0) {
+      lines.push('### Interface');
+      lines.push('|   | 内容 |');
+      lines.push('|---|------|');
+      for (const interfaceChange of interfacesToShow) {
+        const symbol = this.getChangeSymbol(interfaceChange.changeType);
+        let content = `\`${interfaceChange.interfaceName}\``;
+
+        if (interfaceChange.changeType === 'moved') {
+          const oldDir = interfaceChange.oldFile ? this.getDirectory(interfaceChange.oldFile) : '';
+          const newDir = this.getDirectory(interfaceChange.file);
+          content += ` (${oldDir} → ${newDir})`;
+
+          const changes: string[] = [];
+          const addedProps = this.getAddedInterfaceProperties(interfaceChange);
+          const deletedProps = this.getDeletedInterfaceProperties(interfaceChange);
+          const modifiedProps = this.getModifiedInterfaceProperties(interfaceChange);
+          const addedExtends = interfaceChange.extendsInterfaces.after.filter(
+            e => !interfaceChange.extendsInterfaces.before.includes(e)
+          );
+          const deletedExtends = interfaceChange.extendsInterfaces.before.filter(
+            e => !interfaceChange.extendsInterfaces.after.includes(e)
+          );
+
+          if (addedProps.length > 0) {
+            changes.push(`+${addedProps.length} props`);
+          }
+          if (deletedProps.length > 0) {
+            changes.push(`-${deletedProps.length} props`);
+          }
+          if (modifiedProps.length > 0) {
+            changes.push(`~${modifiedProps.length} props`);
+          }
+          if (addedExtends.length > 0) {
+            changes.push(`+extends: ${addedExtends.join(', ')}`);
+          }
+          if (deletedExtends.length > 0) {
+            changes.push(`-extends: ${deletedExtends.join(', ')}`);
+          }
+
+          if (changes.length > 0) {
+            content += ` [${changes.join(', ')}]`;
+          }
+        } else if (interfaceChange.changeType === 'modified') {
+          const changes: string[] = [];
+          const addedProps = this.getAddedInterfaceProperties(interfaceChange);
+          const deletedProps = this.getDeletedInterfaceProperties(interfaceChange);
+          const modifiedProps = this.getModifiedInterfaceProperties(interfaceChange);
+          const addedExtends = interfaceChange.extendsInterfaces.after.filter(
+            e => !interfaceChange.extendsInterfaces.before.includes(e)
+          );
+          const deletedExtends = interfaceChange.extendsInterfaces.before.filter(
+            e => !interfaceChange.extendsInterfaces.after.includes(e)
+          );
+
+          if (addedProps.length > 0) {
+            changes.push(`+${addedProps.length} props: ${addedProps.join(', ')}`);
+          }
+          if (deletedProps.length > 0) {
+            changes.push(`-${deletedProps.length} props: ${deletedProps.join(', ')}`);
+          }
+          if (modifiedProps.length > 0) {
+            changes.push(`~${modifiedProps.length} props: ${modifiedProps.join(', ')}`);
+          }
+          if (addedExtends.length > 0) {
+            changes.push(`+extends: ${addedExtends.join(', ')}`);
+          }
+          if (deletedExtends.length > 0) {
+            changes.push(`-extends: ${deletedExtends.join(', ')}`);
           }
 
           if (changes.length > 0) {
@@ -761,6 +898,143 @@ export class MarkdownReporter {
         result.push({ name, changeType: 'deleted', before: b });
       } else if (b && a) {
         const changed = b.value !== a.value;
+        result.push({
+          name,
+          changeType: changed ? 'modified' : 'unchanged',
+          before: b,
+          after: a,
+        });
+      }
+    }
+
+    return result;
+  }
+
+  private generateInterfaceDetails(interfaces: InterfaceChange[]): string[] {
+    // 削除のみ・変更なしのInterfaceをフィルタリング
+    const interfacesToShow = interfaces.filter(interfaceChange => {
+      if (interfaceChange.changeType === 'deleted') return false;
+      if (interfaceChange.changeType === 'added') return true;
+      if (interfaceChange.changeType === 'moved') return true;
+      const allProperties = this.mergeInterfaceProperties(
+        interfaceChange.properties.before,
+        interfaceChange.properties.after
+      );
+      const changedProperties = allProperties.filter(prop => prop.changeType !== 'unchanged');
+      const extendsChanged = interfaceChange.extendsInterfaces.before.join(',') !==
+                             interfaceChange.extendsInterfaces.after.join(',');
+      return changedProperties.length > 0 || extendsChanged;
+    });
+
+    if (interfacesToShow.length === 0) {
+      return [];
+    }
+
+    const lines: string[] = [];
+    lines.push('## Interface の変更');
+    lines.push('');
+
+    for (const interfaceChange of interfacesToShow) {
+      const fileName = interfaceChange.file.split('/').pop() ?? interfaceChange.file;
+      lines.push(`### ${fileName}`);
+
+      // 移動の場合、移動元パスを表示
+      if (interfaceChange.changeType === 'moved' && interfaceChange.oldFile) {
+        lines.push(`> 移動: \`${interfaceChange.oldFile}\` → \`${interfaceChange.file}\``);
+        lines.push('');
+      }
+
+      const allProperties = this.mergeInterfaceProperties(
+        interfaceChange.properties.before,
+        interfaceChange.properties.after
+      );
+
+      if (allProperties.length > 0) {
+        lines.push('#### Properties');
+        lines.push('|   | Property | 型 | Modifiers |');
+        lines.push('|---|----------|-----|-----------|');
+
+        for (const prop of allProperties) {
+          const symbol = prop.changeType === 'added' ? '+' :
+                        prop.changeType === 'deleted' ? '-' :
+                        prop.changeType === 'modified' ? '~' : '';
+          const type = prop.after?.type ?? prop.before?.type ?? '';
+          const modifiers: string[] = [];
+          const propData = prop.after ?? prop.before;
+          if (propData?.optional) modifiers.push('optional');
+          if (propData?.readonly) modifiers.push('readonly');
+          const modifierText = modifiers.join(', ') || '-';
+          lines.push(`| ${symbol} | ${prop.name} | ${type} | ${modifierText} |`);
+        }
+        lines.push('');
+      }
+
+      // Extends の変更
+      const addedExtends = interfaceChange.extendsInterfaces.after.filter(
+        e => !interfaceChange.extendsInterfaces.before.includes(e)
+      );
+      const deletedExtends = interfaceChange.extendsInterfaces.before.filter(
+        e => !interfaceChange.extendsInterfaces.after.includes(e)
+      );
+
+      if (addedExtends.length > 0 || deletedExtends.length > 0) {
+        lines.push('#### Extends');
+        lines.push('|   | Interface |');
+        lines.push('|---|-----------|');
+
+        for (const ext of addedExtends) {
+          lines.push(`| + | ${ext} |`);
+        }
+        for (const ext of deletedExtends) {
+          lines.push(`| - | ${ext} |`);
+        }
+        lines.push('');
+      }
+
+      if (interfaceChange.relatedPRs.length > 0) {
+        lines.push(this.formatRelatedPRs(interfaceChange.relatedPRs));
+        lines.push('');
+      }
+
+      lines.push('---');
+      lines.push('');
+    }
+
+    return lines;
+  }
+
+  private mergeInterfaceProperties(
+    before: InterfaceProperty[],
+    after: InterfaceProperty[]
+  ): Array<{
+    name: string;
+    changeType: 'added' | 'deleted' | 'modified' | 'unchanged';
+    before?: InterfaceProperty;
+    after?: InterfaceProperty;
+  }> {
+    const result: Array<{
+      name: string;
+      changeType: 'added' | 'deleted' | 'modified' | 'unchanged';
+      before?: InterfaceProperty;
+      after?: InterfaceProperty;
+    }> = [];
+
+    const beforeMap = new Map(before.map(p => [p.name, p]));
+    const afterMap = new Map(after.map(p => [p.name, p]));
+    const allNames = new Set([...beforeMap.keys(), ...afterMap.keys()]);
+
+    for (const name of allNames) {
+      const b = beforeMap.get(name);
+      const a = afterMap.get(name);
+
+      if (!b && a) {
+        result.push({ name, changeType: 'added', after: a });
+      } else if (b && !a) {
+        result.push({ name, changeType: 'deleted', before: b });
+      } else if (b && a) {
+        const changed = b.type !== a.type ||
+                       b.optional !== a.optional ||
+                       b.readonly !== a.readonly;
         result.push({
           name,
           changeType: changed ? 'modified' : 'unchanged',
@@ -1125,6 +1399,34 @@ export class MarkdownReporter {
     for (const after of enumChange.members.after) {
       const before = beforeMap.get(after.name);
       if (before && before.value !== after.value) {
+        result.push(after.name);
+      }
+    }
+    return result;
+  }
+
+  private getAddedInterfaceProperties(interfaceChange: InterfaceChange): string[] {
+    const beforeNames = new Set(interfaceChange.properties.before.map(p => p.name));
+    return interfaceChange.properties.after
+      .filter(p => !beforeNames.has(p.name))
+      .map(p => p.name);
+  }
+
+  private getDeletedInterfaceProperties(interfaceChange: InterfaceChange): string[] {
+    const afterNames = new Set(interfaceChange.properties.after.map(p => p.name));
+    return interfaceChange.properties.before
+      .filter(p => !afterNames.has(p.name))
+      .map(p => p.name);
+  }
+
+  private getModifiedInterfaceProperties(interfaceChange: InterfaceChange): string[] {
+    const beforeMap = new Map(interfaceChange.properties.before.map(p => [p.name, p]));
+    const result: string[] = [];
+    for (const after of interfaceChange.properties.after) {
+      const before = beforeMap.get(after.name);
+      if (before && (before.type !== after.type ||
+                     before.optional !== after.optional ||
+                     before.readonly !== after.readonly)) {
         result.push(after.name);
       }
     }
