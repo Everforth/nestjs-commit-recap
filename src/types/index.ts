@@ -66,6 +66,29 @@ export interface EnumChange {
   relatedPRs: PRInfo[];
 }
 
+export interface InterfaceProperty {
+  name: string;
+  type: string;
+  optional: boolean;
+  readonly: boolean;
+}
+
+export interface InterfaceChange {
+  file: string;
+  oldFile?: string;  // 移動元のパス（moved の場合）
+  interfaceName: string;
+  changeType: ChangeType;
+  properties: {
+    before: InterfaceProperty[];
+    after: InterfaceProperty[];
+  };
+  extendsInterfaces: {
+    before: string[];
+    after: string[];
+  };
+  relatedPRs: PRInfo[];
+}
+
 export interface EndpointInfo {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   path: string;
@@ -151,6 +174,7 @@ export interface AnalysisResult {
   entities: EntityChange[];
   dtos: DTOChange[];
   enums: EnumChange[];
+  interfaces: InterfaceChange[];
   controllers: ControllerChange[];
   modules: ModuleChange[];
   providers: ProviderChange[];
