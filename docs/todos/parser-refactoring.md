@@ -5,26 +5,10 @@
 - ✅ ts-morph 導入（全パーサーをASTベースに移行完了）
 - ✅ Entity 詳細でカラムの変化がない場合、サマリーにも出さない
 - ✅ リレーション（ManyToOne, OneToMany など）の変化も検出・表示
+- ✅ DTO クラスの変更検出（class-validator デコレータベース）
+- ✅ Enum の変更検出（内容ベース検出、複数Enum対応）
 
 ## 未実装機能
-
-### DTO クラスの変更検出
-
-NestJSのDTOクラス（`*.dto.ts`）の変更を検出し、プロパティの追加・削除・型変更を表示する。
-
-**実装内容:**
-- `file-classifier.ts` に `dto` タイプを追加
-- `dto-analyzer.ts` を作成してDTOクラスのプロパティを解析
-- `markdown-reporter.ts` でDTOセクションを追加
-
-### Enum の変更検出
-
-TypeScript Enumの変更を検出し、値の追加・削除・変更を表示する。
-
-**実装内容:**
-- `file-classifier.ts` に `enum` タイプを追加（または内容ベースで判定）
-- `enum-analyzer.ts` を作成してEnum値を解析
-- `markdown-reporter.ts` でEnumセクションを追加
 
 ### Interface の変更検出
 
