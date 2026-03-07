@@ -2,6 +2,7 @@ import type {
   AnalysisResult,
   EntityChange,
   DTOChange,
+  EnumChange,
   ControllerChange,
   ModuleChange,
   ProviderChange,
@@ -9,6 +10,7 @@ import type {
   EntityColumn,
   EntityRelation,
   DTOProperty,
+  EnumMember,
   EndpointInfo,
 } from '../types/index.js';
 import type { PRInfo } from '../git/pr-fetcher.js';
@@ -38,6 +40,10 @@ export class MarkdownReporter {
       lines.push(...this.generateDTODetails(filteredResult.dtos));
     }
 
+    if (filteredResult.enums.length > 0) {
+      lines.push(...this.generateEnumDetails(filteredResult.enums));
+    }
+
     if (filteredResult.controllers.length > 0) {
       lines.push(...this.generateControllerDetails(filteredResult.controllers));
     }
@@ -62,6 +68,7 @@ export class MarkdownReporter {
       ...result,
       entities: this.filterEntityMoves(result.entities),
       dtos: this.filterDTOMoves(result.dtos),
+      enums: this.filterEnumMoves(result.enums),
       controllers: this.filterControllerMoves(result.controllers),
       providers: this.filterProviderMoves(result.providers),
       middlewares: this.filterMiddlewareMoves(result.middlewares),
@@ -154,6 +161,39 @@ export class MarkdownReporter {
         d.changeType === 'moved'
       ),
       ...movedDTOs,
+    ];
+  }
+
+  private filterEnumMoves(enums: EnumChange[]): EnumChange[] {
+    const added = enums.filter(e => e.changeType === 'added');
+    const deleted = enums.filter(e => e.changeType === 'deleted');
+
+    const movedEnumNames = new Set<string>();
+    const movedEnums: EnumChange[] = [];
+
+    for (const add of added) {
+      const del = deleted.find(d => d.enumName === add.enumName);
+      if (del) {
+        movedEnumNames.add(add.enumName);
+        movedEnums.push({
+          ...add,
+          oldFile: del.file,
+          changeType: 'moved',
+          members: {
+            before: del.members.before,
+            after: add.members.after,
+          },
+          relatedPRs: [...del.relatedPRs, ...add.relatedPRs],
+        });
+      }
+    }
+
+    return [
+      ...enums.filter(e =>
+        !movedEnumNames.has(e.enumName) ||
+        e.changeType === 'moved'
+      ),
+      ...movedEnums,
     ];
   }
 
@@ -337,6 +377,73 @@ export class MarkdownReporter {
           }
           if (modifiedProps.length > 0) {
             changes.push(`~${modifiedProps.length} props: ${modifiedProps.join(', ')}`);
+          }
+
+          if (changes.length > 0) {
+            content += ` (${changes.join(', ')})`;
+          }
+        }
+
+        lines.push(`| ${symbol} | ${content} |`);
+      }
+      lines.push('');
+    }
+
+    // Enum サマリー（削除のみは除外、変更がないものも除外）
+    const enumsToShow = result.enums.filter(enumChange => {
+      if (enumChange.changeType === 'deleted') return false;
+      if (enumChange.changeType === 'added') return true;
+      if (enumChange.changeType === 'moved') return true;
+      const addedMembers = this.getAddedMembers(enumChange);
+      const deletedMembers = this.getDeletedMembers(enumChange);
+      const modifiedMembers = this.getModifiedMembers(enumChange);
+      return addedMembers.length > 0 || deletedMembers.length > 0 || modifiedMembers.length > 0;
+    });
+    if (enumsToShow.length > 0) {
+      lines.push('### Enum');
+      lines.push('|   | 内容 |');
+      lines.push('|---|------|');
+      for (const enumChange of enumsToShow) {
+        const symbol = this.getChangeSymbol(enumChange.changeType);
+        let content = `\`${enumChange.enumName}\``;
+
+        if (enumChange.changeType === 'moved') {
+          const oldDir = enumChange.oldFile ? this.getDirectory(enumChange.oldFile) : '';
+          const newDir = this.getDirectory(enumChange.file);
+          content += ` (${oldDir} → ${newDir})`;
+
+          const changes: string[] = [];
+          const addedMembers = this.getAddedMembers(enumChange);
+          const deletedMembers = this.getDeletedMembers(enumChange);
+          const modifiedMembers = this.getModifiedMembers(enumChange);
+
+          if (addedMembers.length > 0) {
+            changes.push(`+${addedMembers.length} members`);
+          }
+          if (deletedMembers.length > 0) {
+            changes.push(`-${deletedMembers.length} members`);
+          }
+          if (modifiedMembers.length > 0) {
+            changes.push(`~${modifiedMembers.length} members`);
+          }
+
+          if (changes.length > 0) {
+            content += ` [${changes.join(', ')}]`;
+          }
+        } else if (enumChange.changeType === 'modified') {
+          const changes: string[] = [];
+          const addedMembers = this.getAddedMembers(enumChange);
+          const deletedMembers = this.getDeletedMembers(enumChange);
+          const modifiedMembers = this.getModifiedMembers(enumChange);
+
+          if (addedMembers.length > 0) {
+            changes.push(`+${addedMembers.length} members: ${addedMembers.join(', ')}`);
+          }
+          if (deletedMembers.length > 0) {
+            changes.push(`-${deletedMembers.length} members: ${deletedMembers.join(', ')}`);
+          }
+          if (modifiedMembers.length > 0) {
+            changes.push(`~${modifiedMembers.length} members: ${modifiedMembers.join(', ')}`);
           }
 
           if (changes.length > 0) {
@@ -557,6 +664,113 @@ export class MarkdownReporter {
     }
 
     return lines;
+  }
+
+  private generateEnumDetails(enums: EnumChange[]): string[] {
+    // 削除のみ・変更なしのEnumをフィルタリング
+    const enumsToShow = enums.filter(enumChange => {
+      if (enumChange.changeType === 'deleted') return false;
+      if (enumChange.changeType === 'added') return true;
+      if (enumChange.changeType === 'moved') return true;
+      const allMembers = this.mergeEnumMembers(enumChange.members.before, enumChange.members.after);
+      const changedMembers = allMembers.filter(member => member.changeType !== 'unchanged');
+      return changedMembers.length > 0;
+    });
+
+    if (enumsToShow.length === 0) {
+      return [];
+    }
+
+    const lines: string[] = [];
+    lines.push('## Enum の変更');
+    lines.push('');
+
+    for (const enumChange of enumsToShow) {
+      const fileName = enumChange.file.split('/').pop() ?? enumChange.file;
+      lines.push(`### ${fileName}`);
+
+      // 移動の場合、移動元パスを表示
+      if (enumChange.changeType === 'moved' && enumChange.oldFile) {
+        lines.push(`> 移動: \`${enumChange.oldFile}\` → \`${enumChange.file}\``);
+        lines.push('');
+      }
+
+      const allMembers = this.mergeEnumMembers(enumChange.members.before, enumChange.members.after);
+
+      if (allMembers.length > 0) {
+        lines.push('#### Members');
+        lines.push('|   | Member | 値 |');
+        lines.push('|---|--------|-----|');
+
+        for (const member of allMembers) {
+          const symbol = member.changeType === 'added' ? '+' :
+                        member.changeType === 'deleted' ? '-' :
+                        member.changeType === 'modified' ? '~' : '';
+          const value = this.formatEnumValue(member.after ?? member.before);
+          lines.push(`| ${symbol} | ${member.name} | ${value} |`);
+        }
+        lines.push('');
+      }
+
+      if (enumChange.relatedPRs.length > 0) {
+        lines.push(this.formatRelatedPRs(enumChange.relatedPRs));
+        lines.push('');
+      }
+
+      lines.push('---');
+      lines.push('');
+    }
+
+    return lines;
+  }
+
+  private formatEnumValue(member: EnumMember | undefined): string {
+    if (!member) return '';
+    if (member.value === undefined) return '(auto)';
+    if (typeof member.value === 'string') return `"${member.value}"`;
+    return String(member.value);
+  }
+
+  private mergeEnumMembers(
+    before: EnumMember[],
+    after: EnumMember[]
+  ): Array<{
+    name: string;
+    changeType: 'added' | 'deleted' | 'modified' | 'unchanged';
+    before?: EnumMember;
+    after?: EnumMember;
+  }> {
+    const result: Array<{
+      name: string;
+      changeType: 'added' | 'deleted' | 'modified' | 'unchanged';
+      before?: EnumMember;
+      after?: EnumMember;
+    }> = [];
+
+    const beforeMap = new Map(before.map(m => [m.name, m]));
+    const afterMap = new Map(after.map(m => [m.name, m]));
+    const allNames = new Set([...beforeMap.keys(), ...afterMap.keys()]);
+
+    for (const name of allNames) {
+      const b = beforeMap.get(name);
+      const a = afterMap.get(name);
+
+      if (!b && a) {
+        result.push({ name, changeType: 'added', after: a });
+      } else if (b && !a) {
+        result.push({ name, changeType: 'deleted', before: b });
+      } else if (b && a) {
+        const changed = b.value !== a.value;
+        result.push({
+          name,
+          changeType: changed ? 'modified' : 'unchanged',
+          before: b,
+          after: a,
+        });
+      }
+    }
+
+    return result;
   }
 
   private mergeProperties(
@@ -885,6 +1099,32 @@ export class MarkdownReporter {
       if (before && (before.type !== after.type ||
                      before.nullable !== after.nullable ||
                      before.decorators.join(',') !== after.decorators.join(','))) {
+        result.push(after.name);
+      }
+    }
+    return result;
+  }
+
+  private getAddedMembers(enumChange: EnumChange): string[] {
+    const beforeNames = new Set(enumChange.members.before.map(m => m.name));
+    return enumChange.members.after
+      .filter(m => !beforeNames.has(m.name))
+      .map(m => m.name);
+  }
+
+  private getDeletedMembers(enumChange: EnumChange): string[] {
+    const afterNames = new Set(enumChange.members.after.map(m => m.name));
+    return enumChange.members.before
+      .filter(m => !afterNames.has(m.name))
+      .map(m => m.name);
+  }
+
+  private getModifiedMembers(enumChange: EnumChange): string[] {
+    const beforeMap = new Map(enumChange.members.before.map(m => [m.name, m]));
+    const result: string[] = [];
+    for (const after of enumChange.members.after) {
+      const before = beforeMap.get(after.name);
+      if (before && before.value !== after.value) {
         result.push(after.name);
       }
     }
