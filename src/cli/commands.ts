@@ -7,6 +7,7 @@ import { execSync } from 'node:child_process';
 import { GitRepository } from '../git/repository.js';
 import { PRFetcher } from '../git/pr-fetcher.js';
 import { EntityAnalyzer } from '../analyzers/entity-analyzer.js';
+import { DTOAnalyzer } from '../analyzers/dto-analyzer.js';
 import { ModuleAnalyzer } from '../analyzers/module-analyzer.js';
 import { ControllerAnalyzer } from '../analyzers/controller-analyzer.js';
 import { ProviderAnalyzer } from '../analyzers/provider-analyzer.js';
@@ -126,6 +127,11 @@ async function runAnalysis(targetPath: string, options: CLIOptions): Promise<voi
   entityAnalyzer.setFileToPRs(fileToPRs);
   const entities = await entityAnalyzer.analyze();
 
+  spinner.text = 'DTO を解析中...';
+  const dtoAnalyzer = new DTOAnalyzer(repo, prFetcher, analyzerOptions);
+  dtoAnalyzer.setFileToPRs(fileToPRs);
+  const dtos = await dtoAnalyzer.analyze();
+
   spinner.text = 'Module を解析中...';
   const moduleAnalyzer = new ModuleAnalyzer(repo, prFetcher, analyzerOptions);
   moduleAnalyzer.setFileToPRs(fileToPRs);
@@ -158,6 +164,7 @@ async function runAnalysis(targetPath: string, options: CLIOptions): Promise<voi
     startDate: startDate.toISOString().split('T')[0],
     endDate: endDate.toISOString().split('T')[0],
     entities,
+    dtos,
     controllers,
     modules,
     providers,
@@ -174,6 +181,7 @@ async function runAnalysis(targetPath: string, options: CLIOptions): Promise<voi
   console.log('');
   console.log(chalk.green('検出された変更:'));
   console.log(`  Entity: ${entities.length}`);
+  console.log(`  DTO: ${dtos.length}`);
   console.log(`  Controller: ${controllers.length}`);
   console.log(`  Module: ${modules.length}`);
   console.log(`  Provider: ${providers.length}`);
