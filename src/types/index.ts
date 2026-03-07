@@ -49,6 +49,23 @@ export interface DTOChange {
   relatedPRs: PRInfo[];
 }
 
+export interface EnumMember {
+  name: string;
+  value: string | number | undefined;  // undefined: 自動計算値
+}
+
+export interface EnumChange {
+  file: string;
+  oldFile?: string;  // 移動元のパス（moved の場合）
+  enumName: string;
+  changeType: ChangeType;
+  members: {
+    before: EnumMember[];
+    after: EnumMember[];
+  };
+  relatedPRs: PRInfo[];
+}
+
 export interface EndpointInfo {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   path: string;
@@ -133,6 +150,7 @@ export interface AnalysisResult {
   endDate: string;
   entities: EntityChange[];
   dtos: DTOChange[];
+  enums: EnumChange[];
   controllers: ControllerChange[];
   modules: ModuleChange[];
   providers: ProviderChange[];
