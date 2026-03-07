@@ -24,9 +24,6 @@ export class MarkdownReporter {
 
     const lines: string[] = [];
 
-    lines.push('# NestJS構造変化レポート');
-    lines.push('');
-    lines.push(`- **リポジトリ**: ${filteredResult.repoPath}`);
     lines.push(`- **期間**: ${filteredResult.startDate} ~ ${filteredResult.endDate}`);
     lines.push('');
 
@@ -293,7 +290,7 @@ export class MarkdownReporter {
     });
     if (entitiesToShow.length > 0) {
       lines.push('### Entity');
-      lines.push('|   | 内容 |');
+      lines.push('|   | Content |');
       lines.push('|---|------|');
       for (const entity of entitiesToShow) {
         const symbol = this.getChangeSymbol(entity.changeType);
@@ -378,7 +375,7 @@ export class MarkdownReporter {
     });
     if (dtosToShow.length > 0) {
       lines.push('### DTO');
-      lines.push('|   | 内容 |');
+      lines.push('|   | Content |');
       lines.push('|---|------|');
       for (const dto of dtosToShow) {
         const symbol = this.getChangeSymbol(dto.changeType);
@@ -445,7 +442,7 @@ export class MarkdownReporter {
     });
     if (enumsToShow.length > 0) {
       lines.push('### Enum');
-      lines.push('|   | 内容 |');
+      lines.push('|   | Content |');
       lines.push('|---|------|');
       for (const enumChange of enumsToShow) {
         const symbol = this.getChangeSymbol(enumChange.changeType);
@@ -514,7 +511,7 @@ export class MarkdownReporter {
     });
     if (interfacesToShow.length > 0) {
       lines.push('### Interface');
-      lines.push('|   | 内容 |');
+      lines.push('|   | Content |');
       lines.push('|---|------|');
       for (const interfaceChange of interfacesToShow) {
         const symbol = this.getChangeSymbol(interfaceChange.changeType);
@@ -613,8 +610,8 @@ export class MarkdownReporter {
       return configChanges.length > 0 && hasAdded;
     });
     if (modulesToShow.length > 0) {
-      lines.push('### Module構成');
-      lines.push('|   | Module | 内容 |');
+      lines.push('### Module');
+      lines.push('|   | Module | Content |');
       lines.push('|---|--------|------|');
       for (const mod of modulesToShow) {
         const symbol = this.getChangeSymbol(mod.changeType);
@@ -628,7 +625,7 @@ export class MarkdownReporter {
     const providersToShow = result.providers.filter(p => p.changeType !== 'deleted');
     if (providersToShow.length > 0) {
       lines.push('### Provider');
-      lines.push('|   | 内容 |');
+      lines.push('|   | Content |');
       lines.push('|---|------|');
       for (const provider of providersToShow) {
         const symbol = this.getChangeSymbol(provider.changeType);
@@ -640,8 +637,8 @@ export class MarkdownReporter {
     // Middleware類 サマリー（削除のみは除外）
     const middlewaresToShow = result.middlewares.filter(m => m.changeType !== 'deleted');
     if (middlewaresToShow.length > 0) {
-      lines.push('### Middleware類');
-      lines.push('|   | 種別 | 内容 |');
+      lines.push('### Middleware');
+      lines.push('|   | Type | Content |');
       lines.push('|---|------|------|');
       for (const mw of middlewaresToShow) {
         const symbol = this.getChangeSymbol(mw.changeType);
@@ -654,7 +651,7 @@ export class MarkdownReporter {
     // 関連PR
     if (result.allPRs.length > 0) {
       const prLinks = result.allPRs.map(pr => `[#${pr.number}](${pr.url})`).join(', ');
-      lines.push(`**関連PR**: ${prLinks}`);
+      lines.push(`**Related PRs**: ${prLinks}`);
       lines.push('');
     }
 
@@ -682,7 +679,7 @@ export class MarkdownReporter {
     }
 
     const lines: string[] = [];
-    lines.push('## Entity の変更');
+    lines.push('## Entity Changes');
     lines.push('');
 
     for (const entity of entitiesToShow) {
@@ -691,7 +688,7 @@ export class MarkdownReporter {
 
       // 移動の場合、移動元パスを表示
       if (entity.changeType === 'moved' && entity.oldFile) {
-        lines.push(`> 移動: \`${entity.oldFile}\` → \`${entity.file}\``);
+        lines.push(`> Moved: \`${entity.oldFile}\` → \`${entity.file}\``);
         lines.push('');
       }
 
@@ -699,7 +696,7 @@ export class MarkdownReporter {
 
       if (allColumns.length > 0) {
         lines.push('#### Columns');
-        lines.push('|   | Column | 変更前 | 変更後 |');
+        lines.push('|   | Column | Before | After |');
         lines.push('|---|--------|--------|--------|');
 
         for (const col of allColumns) {
@@ -760,7 +757,7 @@ export class MarkdownReporter {
     }
 
     const lines: string[] = [];
-    lines.push('## DTO の変更');
+    lines.push('## DTO Changes');
     lines.push('');
 
     for (const dto of dtosToShow) {
@@ -769,7 +766,7 @@ export class MarkdownReporter {
 
       // 移動の場合、移動元パスを表示
       if (dto.changeType === 'moved' && dto.oldFile) {
-        lines.push(`> 移動: \`${dto.oldFile}\` → \`${dto.file}\``);
+        lines.push(`> Moved: \`${dto.oldFile}\` → \`${dto.file}\``);
         lines.push('');
       }
 
@@ -777,7 +774,7 @@ export class MarkdownReporter {
 
       if (allProperties.length > 0) {
         lines.push('#### Properties');
-        lines.push('|   | Property | 型 | Decorators |');
+        lines.push('|   | Property | Type | Decorators |');
         lines.push('|---|----------|-----|-----------|');
 
         for (const prop of allProperties) {
@@ -819,7 +816,7 @@ export class MarkdownReporter {
     }
 
     const lines: string[] = [];
-    lines.push('## Enum の変更');
+    lines.push('## Enum Changes');
     lines.push('');
 
     for (const enumChange of enumsToShow) {
@@ -828,7 +825,7 @@ export class MarkdownReporter {
 
       // 移動の場合、移動元パスを表示
       if (enumChange.changeType === 'moved' && enumChange.oldFile) {
-        lines.push(`> 移動: \`${enumChange.oldFile}\` → \`${enumChange.file}\``);
+        lines.push(`> Moved: \`${enumChange.oldFile}\` → \`${enumChange.file}\``);
         lines.push('');
       }
 
@@ -836,7 +833,7 @@ export class MarkdownReporter {
 
       if (allMembers.length > 0) {
         lines.push('#### Members');
-        lines.push('|   | Member | 値 |');
+        lines.push('|   | Member | Value |');
         lines.push('|---|--------|-----|');
 
         for (const member of allMembers) {
@@ -931,7 +928,7 @@ export class MarkdownReporter {
     }
 
     const lines: string[] = [];
-    lines.push('## Interface の変更');
+    lines.push('## Interface Changes');
     lines.push('');
 
     for (const interfaceChange of interfacesToShow) {
@@ -940,7 +937,7 @@ export class MarkdownReporter {
 
       // 移動の場合、移動元パスを表示
       if (interfaceChange.changeType === 'moved' && interfaceChange.oldFile) {
-        lines.push(`> 移動: \`${interfaceChange.oldFile}\` → \`${interfaceChange.file}\``);
+        lines.push(`> Moved: \`${interfaceChange.oldFile}\` → \`${interfaceChange.file}\``);
         lines.push('');
       }
 
@@ -951,7 +948,7 @@ export class MarkdownReporter {
 
       if (allProperties.length > 0) {
         lines.push('#### Properties');
-        lines.push('|   | Property | 型 | Modifiers |');
+        lines.push('|   | Property | Type | Modifiers |');
         lines.push('|---|----------|-----|-----------|');
 
         for (const prop of allProperties) {
@@ -1149,7 +1146,7 @@ export class MarkdownReporter {
     }
 
     const lines: string[] = [];
-    lines.push('## Endpoint の変更');
+    lines.push('## Endpoint Changes');
     lines.push('');
 
     for (const controller of controllersToShow) {
@@ -1158,7 +1155,7 @@ export class MarkdownReporter {
 
       const allEndpoints = this.mergeEndpoints(controller.endpoints.before, controller.endpoints.after);
 
-      lines.push('|   | Method | Path | 変更前 | 変更後 |');
+      lines.push('|   | Method | Path | Before | After |');
       lines.push('|---|--------|------|--------|--------|');
 
       for (const ep of allEndpoints) {
@@ -1207,7 +1204,7 @@ export class MarkdownReporter {
     }
 
     const lines: string[] = [];
-    lines.push('## Module 構成の変更');
+    lines.push('## Module Configuration Changes');
     lines.push('');
 
     for (const mod of modulesToShow) {
@@ -1215,7 +1212,7 @@ export class MarkdownReporter {
       const configChanges = this.getModuleConfigChanges(mod);
 
       lines.push(`### ${fileName}`);
-      lines.push('|   | 項目 | 変更前 | 変更後 |');
+      lines.push('|   | Item | Before | After |');
       lines.push('|---|------|--------|--------|');
 
       for (const change of configChanges) {
@@ -1244,9 +1241,9 @@ export class MarkdownReporter {
     }
 
     const lines: string[] = [];
-    lines.push('## Provider の変更');
+    lines.push('## Provider Changes');
     lines.push('');
-    lines.push('|   | ファイル | クラス名 |');
+    lines.push('|   | File | Class Name |');
     lines.push('|---|----------|----------|');
 
     for (const provider of providersToShow) {
@@ -1277,9 +1274,9 @@ export class MarkdownReporter {
     }
 
     const lines: string[] = [];
-    lines.push('## Middleware類 の変更');
+    lines.push('## Middleware Changes');
     lines.push('');
-    lines.push('|   | ファイル | 種別 | クラス名 |');
+    lines.push('|   | File | Type | Class Name |');
     lines.push('|---|----------|------|----------|');
 
     for (const mw of middlewaresToShow) {
@@ -1479,7 +1476,7 @@ export class MarkdownReporter {
       parts.push(`+controllers: ${addedControllers.join(', ')}`);
     }
 
-    return parts.join(', ') || '変更あり';
+    return parts.join(', ') || 'Changes detected';
   }
 
   private getAddedItems(before: Array<{ name: string }>, after: Array<{ name: string }>): string[] {
@@ -1619,7 +1616,7 @@ export class MarkdownReporter {
   private formatRelatedPRs(prs: PRInfo[]): string {
     if (prs.length === 0) return '';
     const links = prs.map(pr => `[#${pr.number}](${pr.url})`).join(', ');
-    return `**関連PR**: ${links}`;
+    return `**Related PRs**: ${links}`;
   }
 
   private collectPRs(prArrays: PRInfo[][]): PRInfo[] {
