@@ -9,6 +9,7 @@ import { PRFetcher } from '../git/pr-fetcher.js';
 import { EntityAnalyzer } from '../analyzers/entity-analyzer.js';
 import { DTOAnalyzer } from '../analyzers/dto-analyzer.js';
 import { EnumAnalyzer } from '../analyzers/enum-analyzer.js';
+import { InterfaceAnalyzer } from '../analyzers/interface-analyzer.js';
 import { ModuleAnalyzer } from '../analyzers/module-analyzer.js';
 import { ControllerAnalyzer } from '../analyzers/controller-analyzer.js';
 import { ProviderAnalyzer } from '../analyzers/provider-analyzer.js';
@@ -138,6 +139,11 @@ async function runAnalysis(targetPath: string, options: CLIOptions): Promise<voi
   enumAnalyzer.setFileToPRs(fileToPRs);
   const enums = await enumAnalyzer.analyze();
 
+  spinner.text = 'Interface を解析中...';
+  const interfaceAnalyzer = new InterfaceAnalyzer(repo, prFetcher, analyzerOptions);
+  interfaceAnalyzer.setFileToPRs(fileToPRs);
+  const interfaces = await interfaceAnalyzer.analyze();
+
   spinner.text = 'Module を解析中...';
   const moduleAnalyzer = new ModuleAnalyzer(repo, prFetcher, analyzerOptions);
   moduleAnalyzer.setFileToPRs(fileToPRs);
@@ -172,6 +178,7 @@ async function runAnalysis(targetPath: string, options: CLIOptions): Promise<voi
     entities,
     dtos,
     enums,
+    interfaces,
     controllers,
     modules,
     providers,
@@ -190,6 +197,7 @@ async function runAnalysis(targetPath: string, options: CLIOptions): Promise<voi
   console.log(`  Entity: ${entities.length}`);
   console.log(`  DTO: ${dtos.length}`);
   console.log(`  Enum: ${enums.length}`);
+  console.log(`  Interface: ${interfaces.length}`);
   console.log(`  Controller: ${controllers.length}`);
   console.log(`  Module: ${modules.length}`);
   console.log(`  Provider: ${providers.length}`);
