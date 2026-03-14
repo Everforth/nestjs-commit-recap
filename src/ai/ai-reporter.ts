@@ -5,7 +5,7 @@ export class AIReporter {
 		const lines: string[] = [];
 
 		// ヘッダー
-		lines.push("# キャッチアップレポート");
+		lines.push("# キャッチアップ");
 		lines.push("");
 		lines.push(`- **生成日時**: ${new Date().toLocaleString("ja-JP")}`);
 		lines.push(`- **対象期間**: ${options.startDate} ~ ${options.endDate}`);
