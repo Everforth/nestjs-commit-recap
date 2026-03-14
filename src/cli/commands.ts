@@ -1,9 +1,12 @@
 import { execSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, parse, resolve } from "node:path";
 import chalk from "chalk";
 import { Command } from "commander";
 import ora from "ora";
+import { AIAnalyzer } from "../ai/ai-analyzer.js";
+import { AIReporter } from "../ai/ai-reporter.js";
+import { AnthropicClient } from "../ai/anthropic-client.js";
 import { ControllerAnalyzer } from "../analyzers/controller-analyzer.js";
 import { DTOAnalyzer } from "../analyzers/dto-analyzer.js";
 import { EntityAnalyzer } from "../analyzers/entity-analyzer.js";
@@ -247,4 +250,49 @@ async function runAnalysis(
 		console.log("");
 		console.log(markdown);
 	}
+
+	// AI分析（APIキーがある場合のみ実行）
+	const apiKey = process.env.ANTHROPIC_API_KEY;
+	if (apiKey) {
+		const aiSpinner = ora("AI分析を実行中...").start();
+
+		try {
+			const client = new AnthropicClient({ apiKey });
+			const aiAnalyzer = new AIAnalyzer(client, options.verbose);
+			const aiResult = await aiAnalyzer.analyze(markdown);
+
+			if (aiResult.error) {
+				aiSpinner.warn(`AI分析でエラーが発生しました: ${aiResult.error}`);
+			} else {
+				const aiReporter = new AIReporter();
+				const aiMarkdown = aiReporter.format(aiResult, {
+					startDate: result.startDate,
+					endDate: result.endDate,
+				});
+
+				// AI分析結果の出力
+				const aiOutputPath = options.output
+					? getAIOutputPath(options.output)
+					: "commit-recap-ai.md";
+
+				const resolvedAIPath = resolve(aiOutputPath);
+				writeFileSync(resolvedAIPath, aiMarkdown, "utf-8");
+				aiSpinner.succeed(
+					chalk.green(`AI分析を出力しました: ${resolvedAIPath}`),
+				);
+			}
+		} catch (error) {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			aiSpinner.warn(`AI分析でエラーが発生しました: ${errorMessage}`);
+			if (options.verbose) {
+				console.error(error);
+			}
+		}
+	}
+}
+
+function getAIOutputPath(originalPath: string): string {
+	const parsed = parse(originalPath);
+	return join(parsed.dir, `${parsed.name}.ai${parsed.ext}`);
 }
