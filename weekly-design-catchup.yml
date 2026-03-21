@@ -11,7 +11,8 @@ on:
       days:
         description: 'Number of days to analyze'
         required: false
-        default: '7'
+        type: number
+        default: 7
 
 jobs:
   weekly-report:
