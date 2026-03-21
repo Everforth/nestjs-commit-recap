@@ -1,11 +1,3 @@
-# 週次設計意思決定レポート自動生成ワークフロー
-#
-# このファイルを `.github/workflows/weekly-design-catchup.yml` としてコピーし、
-# 実行したいリポジトリに配置してください。
-#
-# 必須: ANTHROPIC_API_KEY をリポジトリの Secrets に設定してください
-# Settings → Secrets and variables → Actions → New repository secret
-
 name: Weekly Design Catchup
 
 on:
