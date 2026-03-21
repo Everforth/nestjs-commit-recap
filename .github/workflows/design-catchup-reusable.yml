@@ -63,7 +63,7 @@ jobs:
           OUTPUT_PATH="../reports/weekly-design-catchup-${REPORT_DATE}.md"
 
           # レポート生成
-          node dist/design-catchup.js .. -d ${{ inputs.days }} -o "${OUTPUT_PATH}" --verbose
+          npm run design -- .. -d ${{ inputs.days }} -o "${OUTPUT_PATH}" --verbose
 
           # 出力ファイルパスを環境変数に保存
           echo "report_path=${OUTPUT_PATH}" >> $GITHUB_OUTPUT
