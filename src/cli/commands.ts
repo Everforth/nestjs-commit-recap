@@ -259,7 +259,7 @@ async function runAnalysis(
 		try {
 			const client = new AnthropicClient({ apiKey });
 			const aiAnalyzer = new AIAnalyzer(client, options.verbose);
-			const aiResult = await aiAnalyzer.analyze(markdown);
+			const aiResult = await aiAnalyzer.analyze(markdown, allPRs);
 
 			if (aiResult.error) {
 				aiSpinner.warn(`AI分析でエラーが発生しました: ${aiResult.error}`);
