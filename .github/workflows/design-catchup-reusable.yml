@@ -1,0 +1,120 @@
+name: Design Catchup Report Generator
+
+on:
+  workflow_call:
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+    inputs:
+      days:
+        description: 'Number of days to analyze'
+        required: false
+        type: number
+        default: 7
+      issue_labels:
+        description: 'Comma-separated list of labels to add to the issue'
+        required: false
+        type: string
+        default: 'design-review,weekly-report'
+
+jobs:
+  generate-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout commit-recap tool
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/commit-recap
+          ref: main
+          path: commit-recap-tool
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: commit-recap-tool/package-lock.json
+
+      - name: Install dependencies
+        working-directory: commit-recap-tool
+        run: npm ci
+
+      - name: Build commit-recap
+        working-directory: commit-recap-tool
+        run: npm run build
+
+      - name: Generate design catchup report
+        id: generate
+        working-directory: commit-recap-tool
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          REPORT_DATE=$(date +%Y%m%d)
+          OUTPUT_PATH="../reports/weekly-design-catchup-${REPORT_DATE}.md"
+
+          # レポート生成
+          npm run design -- .. -d ${{ inputs.days }} -o "${OUTPUT_PATH}" --verbose
+
+          # 出力ファイルパスを環境変数に保存
+          echo "report_path=${OUTPUT_PATH}" >> $GITHUB_OUTPUT
+          echo "report_date=${REPORT_DATE}" >> $GITHUB_OUTPUT
+
+          # レポートが生成されたか確認
+          if [ ! -f "${OUTPUT_PATH}" ]; then
+            echo "Error: Report file not found at ${OUTPUT_PATH}"
+            exit 1
+          fi
+
+          echo "Report generated successfully at ${OUTPUT_PATH}"
+
+      - name: Create Issue with report
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const reportPath = '${{ steps.generate.outputs.report_path }}';
+            const reportDate = '${{ steps.generate.outputs.report_date }}';
+
+            // レポート内容を読み込み
+            const reportContent = fs.readFileSync(reportPath, 'utf8');
+
+            // Issue のタイトルと本文を作成
+            const issueTitle = `週次設計意思決定キャッチアップ (${reportDate.substring(0,4)}/${reportDate.substring(4,6)}/${reportDate.substring(6,8)})`;
+
+            const issueBody = `${reportContent}
+
+            ---
+
+            **自動生成レポート**: このレポートは [commit-recap](https://github.com/${{ github.repository_owner }}/commit-recap) により自動生成されました。
+            **生成日時**: ${new Date().toISOString()}
+            **対象期間**: 過去 ${{ inputs.days }} 日間`;
+
+            // ラベルを配列に変換
+            const labelsInput = '${{ inputs.issue_labels }}';
+            const labels = labelsInput.split(',').map(l => l.trim()).filter(l => l.length > 0);
+
+            // Issue を作成
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issueTitle,
+              body: issueBody,
+              labels: labels
+            });
+
+            console.log(`Issue created: ${issue.data.html_url}`);
+            core.summary.addRaw(`✅ Issue created: [#${issue.data.number}](${issue.data.html_url})`);
+            await core.summary.write();

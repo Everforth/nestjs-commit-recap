@@ -1,5 +1,6 @@
 import type { PRInfo } from "../git/pr-fetcher.js";
 
+export type { PRInfo };
 export type ChangeType = "added" | "deleted" | "modified" | "moved";
 
 export interface EntityColumn {
@@ -193,3 +194,5 @@ export interface AnalyzerOptions {
 	skipPR?: boolean;
 	verbose?: boolean;
 }
+
+export * from "./weekly-analysis.js";
