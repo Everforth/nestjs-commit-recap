@@ -145,3 +145,5 @@ vite.config.ts.timestamp-*
 
 # Local generated files
 commit-recap-ai.md
+
+reports/*.**

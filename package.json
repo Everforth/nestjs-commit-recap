@@ -5,7 +5,10 @@
 	"type": "module",
 	"main": "./dist/index.js",
 	"bin": {
-		"commit-recap": "./dist/index.js"
+		"commit-recap": "./dist/index.js",
+		"design-catchup": "./dist/design-decisions/index.js",
+		"collect-design-data": "./dist/design-decisions/collect-cli.js",
+		"generate-design-report": "./dist/design-decisions/generate-cli.js"
 	},
 	"scripts": {
 		"dev": "tsx src/index.ts",
@@ -15,7 +18,10 @@
 		"format": "biome format --write .",
 		"lint": "biome lint --write .",
 		"check": "biome check --write .",
-		"prepare": "husky"
+		"prepare": "husky",
+		"design": "tsx src/design-decisions/index.ts",
+		"design:collect": "tsx src/design-decisions/collect-cli.ts",
+		"design:generate": "tsx src/design-decisions/generate-cli.ts"
 	},
 	"keywords": [
 		"nestjs",
