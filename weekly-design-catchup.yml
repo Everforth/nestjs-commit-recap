@@ -15,8 +15,8 @@ on:
 
 jobs:
   weekly-report:
-    # commit-recap リポジトリの再利用可能なワークフローを呼び出し
-    uses: Everforth/commit-recap/.github/workflows/design-catchup-reusable.yml@main
+    # nestjs-commit-recap リポジトリの再利用可能なワークフローを呼び出し
+    uses: Everforth/nestjs-commit-recap/.github/workflows/design-catchup-reusable.yml@main
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     with:
