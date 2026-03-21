@@ -3,6 +3,11 @@ import type { DesignDecisionData } from "./types.js";
 export function buildDesignDecisionPrompt(data: DesignDecisionData): string {
 	const { period, commits, prs, targetChanges } = data;
 
+	// DTOファイルを除外するヘルパー関数
+	const filterOutDTOFiles = <T extends { path: string }>(files: T[]): T[] => {
+		return files.filter((f) => !f.path.toLowerCase().includes("dto"));
+	};
+
 	return `あなたはエンジニアリング組織のテクニカルアナリストです。
 直近1週間のコード変更を分析し、CTOが設計上の意思決定をキャッチアップするためのレポートを作成してください。
 良し悪しの評価は不要です。「何がどう決まったか」を正確に記述することに集中してください。
@@ -23,21 +28,22 @@ ${commits.length > 20 ? `\n... 他 ${commits.length - 20}件` : ""}
 マージ済みPR数: ${prs.length}件
 
 ${prs
-	.map(
-		(pr) => `### PR #${pr.number}: ${pr.title}
+	.map((pr) => {
+		const nonDtoFiles = filterOutDTOFiles(pr.files);
+		return `### PR #${pr.number}: ${pr.title}
 URL: ${pr.url}
 マージ日: ${pr.mergedAt || pr.createdAt}
 
 ${pr.body || "(本文なし)"}
 
-変更ファイル数: ${pr.files.length}
-${pr.files
+変更ファイル数: ${nonDtoFiles.length}
+${nonDtoFiles
 	.slice(0, 5)
 	.map((f) => `  - ${f.path} (+${f.additions || 0}/-${f.deletions || 0})`)
 	.join("\n")}
-${pr.files.length > 5 ? `  ... 他 ${pr.files.length - 5}件` : ""}
-`,
-	)
+${nonDtoFiles.length > 5 ? `  ... 他 ${nonDtoFiles.length - 5}件` : ""}
+`;
+	})
 	.join("\n---\n\n")}
 
 ## 対象変更の詳細（設計上の意思決定を含む変更）
