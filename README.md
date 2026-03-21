@@ -75,9 +75,14 @@ export ANTHROPIC_API_KEY=sk-ant-...
 
 #### 3. 実行
 
-通常通り実行（APIキーとgh CLIがあれば自動的にAI分析を実行）:
+APIキーとgh CLIがあれば自動的にAI分析を実行します:
 ```bash
+# 開発モード（推奨）
 npm run dev -- /path/to/repo -o report.md
+
+# ビルド後
+npm run build
+npm start -- /path/to/repo -o report.md
 ```
 
 #### 4. 出力ファイル
@@ -89,22 +94,51 @@ npm run dev -- /path/to/repo -o report.md
 - APIキーが設定されていない場合、AI分析はスキップされ、`report.md`のみが生成されます
 - gh CLIが認証されていない場合、PR情報（PR本文を含む）は取得されませんが、コードの変更から実装意図を推測してAI分析を実行します
 
-## インストール
+## セットアップ
 
 ```bash
+# 依存関係のインストール
 npm install
+
+# ビルド（本番使用時のみ必要）
 npm run build
 ```
 
+**注意**: 開発時は`npm run dev`で直接実行できるため、ビルドは不要です。
+
 ## 基本的な使い方
 
+### 実行方法
+
+#### 方法1: 開発モード（推奨、ビルド不要）
 ```bash
-# 開発モードで実行（7日間の変更を解析）
+# tsxを使って直接実行（最も簡単）
 npm run dev -- /path/to/nestjs-repo
+```
 
-# ビルド済みで実行
+#### 方法2: ビルド後に実行
+```bash
+# 1. ビルド
+npm run build
+
+# 2. 実行
+npm start -- /path/to/nestjs-repo
+# または
 node dist/index.js /path/to/nestjs-repo
+```
 
+#### 方法3: グローバルインストール
+```bash
+# 1. インストール
+npm install -g .
+
+# 2. どこからでも実行可能
+commit-recap /path/to/nestjs-repo
+```
+
+### オプション例
+
+```bash
 # ファイルに出力
 npm run dev -- /path/to/nestjs-repo -o report.md
 
@@ -118,13 +152,17 @@ npm run dev -- /path/to/nestjs-repo --verbose
 npm run dev -- /path/to/nestjs-repo -d 14 -o report.md --verbose
 ```
 
-### 実行例
+### 完全な実行例（AI分析機能付き）
 
 ```bash
-# AI分析機能を使った完全な実行例
+# 環境変数を設定
 export ANTHROPIC_API_KEY=sk-ant-...
-npm run build
-node dist/index.js ../my-nestjs-project -d 7 -o /tmp/report.md
+
+# gh CLIの認証確認
+gh auth status
+
+# 実行（開発モード）
+npm run dev -- ../my-nestjs-project -d 7 -o /tmp/report.md
 
 # 出力:
 # ✔ 解析完了
