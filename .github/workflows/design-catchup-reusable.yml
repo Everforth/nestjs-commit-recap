@@ -1,6 +1,18 @@
 name: Design Catchup Report Generator
 
 on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Number of days to analyze'
+        required: false
+        type: number
+        default: 7
+      issue_labels:
+        description: 'Comma-separated list of labels to add to the issue'
+        required: false
+        type: string
+        default: 'design-review,weekly-report'
   workflow_call:
     secrets:
       ANTHROPIC_API_KEY:
