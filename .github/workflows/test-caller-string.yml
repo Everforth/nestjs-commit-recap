@@ -1,0 +1,16 @@
+name: Test Caller with String
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Number of days'
+        required: false
+        type: string
+        default: '7'
+
+jobs:
+  call-reusable:
+    uses: ./.github/workflows/test-reusable-string.yml
+    with:
+      days: ${{ inputs.days || '7' }}

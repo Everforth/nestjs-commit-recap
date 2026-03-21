@@ -1,0 +1,17 @@
+name: Test Reusable with String
+
+on:
+  workflow_call:
+    inputs:
+      days:
+        description: 'Number of days'
+        required: false
+        type: string
+        default: '7'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test input
+        run: echo "Days received:" ${{ inputs.days }}

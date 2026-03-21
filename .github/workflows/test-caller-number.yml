@@ -1,0 +1,16 @@
+name: Test Caller with Number
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Number of days'
+        required: false
+        type: number
+        default: 7
+
+jobs:
+  call-reusable:
+    uses: ./.github/workflows/test-reusable-number.yml
+    with:
+      days: ${{ fromJson(inputs.days || '7') }}

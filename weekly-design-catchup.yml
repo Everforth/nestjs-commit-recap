@@ -21,5 +21,5 @@ jobs:
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     with:
-      days: ${{ github.event.inputs.days || 7 }}
+      days: ${{ fromJson(github.event.inputs.days || '7') }}
       issue_labels: 'design-review,weekly-report,automated'
