@@ -94,6 +94,170 @@ npm start -- /path/to/repo -o report.md
 - APIキーが設定されていない場合、AI分析はスキップされ、`report.md`のみが生成されます
 - gh CLIが認証されていない場合、PR情報（PR本文を含む）は取得されませんが、コードの変更から実装意図を推測してAI分析を実行します
 
+## 設計意思決定レポート（CTO向け）
+
+CTOが設計上の意思決定をキャッチアップするための専用レポート生成機能です。
+通常の変更レポートとは別に、設計に影響する変更を抽出し、ドメイン別に整理したレポートを生成します。
+
+### 特徴
+
+- **設計に影響する変更を自動抽出**: DB スキーマ、API エンドポイント、ドメインモデル等の重要な変更のみを対象
+- **ドメイン別に整理**: 変更をドメイン/コンテキストごとに分類して表示
+- **意思決定を4つの観点で整理**:
+  - 確定したビジネスルール
+  - データ構造の変化
+  - 責務・境界の変化
+  - 新たな概念・用語
+- **1コマンドで完結**: データ収集からレポート生成まで一括実行
+
+### 使い方
+
+#### 基本的な使い方（推奨）
+
+1コマンドでデータ収集からレポート生成まで実行します:
+
+```bash
+# 環境変数の設定
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# 開発モード（推奨）
+npm run design -- <repo-path> -d 7
+
+# ビルド後
+design-catchup <repo-path> -d 7
+```
+
+**オプション**:
+- `-d, --days <number>`: 期間（日数、デフォルト: 7）
+- `-o, --output <path>`: 出力ファイルパス（デフォルト: ./reports/weekly-design-catchup-YYYYMMDD.md）
+- `--save-data <path>`: 収集データをJSONとして保存（デバッグ用）
+- `--api-key <key>`: Anthropic APIキー（環境変数より優先）
+- `--verbose`: 詳細ログを表示
+
+#### 実行例
+
+```bash
+# 基本的な実行（カレントディレクトリを対象）
+npm run design -- . -d 7
+
+# 別のリポジトリを対象に実行
+npm run design -- /path/to/another/repo -d 14
+
+# 収集データも保存して確認したい場合
+npm run design -- . -d 7 --save-data ./debug-data.json --verbose
+```
+
+#### 詳細: 2段階での実行（デバッグ用）
+
+データ収集とレポート生成を別々に実行することも可能です:
+
+**1. データ収集**
+```bash
+npm run design:collect <repo-path> -d 7 -o ./design-data.json
+```
+
+**2. レポート生成**
+```bash
+npm run design:generate ./design-data.json -o ./reports
+```
+
+**3. 別のリポジトリパスでレポート生成**
+```bash
+# 収集時とは別のリポジトリを参照してレポート生成
+npm run design:generate ./design-data.json -r /path/to/another/repo -o ./reports
+```
+
+### 対象となる変更
+
+以下のカテゴリに該当する変更が抽出されます:
+
+- **DB スキーマ変更**: migration、schema定義、.prisma、.sqlファイル
+- **API エンドポイント**: controller、route、api関連ファイル
+- **ドメインモデル・エンティティ**: entity、domain、model関連ファイル
+- **状態管理・データフロー**: store、state、redux、zustand等
+- **外部サービス連携**: integration、external、service、client関連ファイル
+- **リファクタリング**: 責務の再分割・抽象化を伴う変更
+
+### 除外される変更
+
+- ライブラリバージョン更新のみ
+- テキスト・コピーの修正
+- スタイル・フォーマットのみ
+- CI/CDの軽微な調整
+- テストファイルのみの変更
+
+### GitHub Actions での自動実行
+
+設計意思決定レポートを GitHub Actions で週次自動生成し、Issue として投稿できます。
+
+**特徴**:
+- 週1回の自動実行でレポートを生成
+- 生成されたレポートを自動的に Issue として投稿
+- commit-recap リポジトリのワークフローを再利用（設定ファイルの更新に自動対応）
+
+**セットアップ方法**:
+
+1. リポジトリの Secrets に `ANTHROPIC_API_KEY` を設定
+2. `.github/workflows/weekly-design-catchup.yml` を作成:
+
+```yaml
+name: Weekly Design Catchup
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # 毎週月曜日 09:00 UTC
+  workflow_dispatch:
+
+jobs:
+  weekly-report:
+    uses: <owner>/commit-recap/.github/workflows/design-catchup-reusable.yml@main
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    with:
+      days: 7
+      issue_labels: 'design-review,weekly-report'
+```
+
+詳細は [GitHub Actions 統合ガイド](./docs/github-actions-integration.md) を参照してください。
+
+### レポート形式
+
+生成されるレポートには以下の内容が含まれます:
+
+```markdown
+# 週次設計意思決定キャッチアップ
+**対象期間:** YYYY/MM/DD 〜 YYYY/MM/DD
+
+## 今週の概観
+（どのドメインで何が決まったかを3〜5文で概述）
+
+## ドメイン別 意思決定サマリー
+
+### [ドメイン名]
+
+#### 確定したビジネスルール
+- （決定内容） ← [#PR番号](url)
+
+#### データ構造の変化
+| 対象 | 変更前 | 変更後 |
+|------|--------|--------|
+| ... | ... | ... |
+
+#### 責務・境界の変化
+- （どの処理がどこからどこへ移ったか）
+
+#### 新たな概念・用語
+| 用語 | 意味・定義 |
+|------|-----------|
+| ... | ... |
+
+#### この設計が前提としていること
+- （暗黙の仮定・制限・将来変わりうる前提）
+
+## 把握できなかった意図
+（PR説明不足などで背景が読み取れなかった変更）
+```
+
 ## セットアップ
 
 ```bash
@@ -280,6 +444,13 @@ commit-recap/
 │   │   ├── anthropic-client.ts     # Anthropic APIクライアント
 │   │   ├── ai-analyzer.ts          # AI分析オーケストレーター
 │   │   └── ai-reporter.ts          # AI分析結果整形
+│   ├── design-decisions/
+│   │   ├── types.ts                # 設計意思決定の型定義
+│   │   ├── data-collector.ts       # データ収集クラス
+│   │   ├── prompts.ts              # レポート生成プロンプト
+│   │   ├── report-generator.ts     # レポート生成クラス
+│   │   ├── collect-cli.ts          # データ収集CLI
+│   │   └── generate-cli.ts         # レポート生成CLI
 │   ├── reporters/
 │   │   └── markdown-reporter.ts    # Markdown生成
 │   ├── types/

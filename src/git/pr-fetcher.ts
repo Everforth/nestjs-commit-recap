@@ -5,6 +5,7 @@ export interface PRInfo {
 	title: string;
 	url: string;
 	mergedAt: string | null;
+	createdAt?: string;
 	body: string | null;
 }
 
@@ -23,7 +24,7 @@ export class PRFetcher {
 		try {
 			// gh CLIを使用してマージ済みPRを取得
 			const result = execSync(
-				`gh pr list --state merged --search "merged:>=${sinceStr}" --json number,title,url,mergedAt,body --limit 100`,
+				`gh pr list --state merged --search "merged:>=${sinceStr}" --json number,title,url,mergedAt,createdAt,body --limit 100`,
 				{
 					cwd: this.repoPath,
 					encoding: "utf-8",
@@ -45,7 +46,7 @@ export class PRFetcher {
 		for (const hash of commitHashes) {
 			try {
 				const result = execSync(
-					`gh pr list --state merged --search "${hash}" --json number,title,url,mergedAt,body --limit 1`,
+					`gh pr list --state merged --search "${hash}" --json number,title,url,mergedAt,createdAt,body --limit 1`,
 					{
 						cwd: this.repoPath,
 						encoding: "utf-8",

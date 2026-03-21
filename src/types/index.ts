@@ -1,5 +1,6 @@
 import type { PRInfo } from "../git/pr-fetcher.js";
 
+export type { PRInfo };
 export type ChangeType = "added" | "deleted" | "modified" | "moved";
 
 export interface EntityColumn {
