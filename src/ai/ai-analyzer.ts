@@ -1,7 +1,9 @@
 import type { PRInfo } from "../git/pr-fetcher.js";
+import type { WeeklyAnalysisResult } from "../types/index.js";
 import type { AnthropicClient } from "./anthropic-client.js";
 import { buildReviewPrompt, buildSummaryPrompt } from "./prompts.js";
 import type { AIAnalysisResult, ChangeSummary, DesignReview } from "./types.js";
+import { buildWeeklySummaryPrompt } from "./weekly-prompts.js";
 
 export class AIAnalyzer {
 	constructor(
@@ -114,5 +116,125 @@ export class AIAnalyzer {
 		return {
 			rawResponse: response,
 		};
+	}
+
+	/**
+	 * 週次分析を実行
+	 */
+	async analyzeWeekly(
+		weeklyResult: WeeklyAnalysisResult,
+		prDescriptions: string,
+	): Promise<string> {
+		if (this.verbose) {
+			console.log("  Generating weekly analysis...");
+		}
+
+		const entityEvolutionsText = this.formatEntityEvolutions(
+			weeklyResult.entityEvolutions,
+		);
+		const featureGroupsText = this.formatFeatureGroups(
+			weeklyResult.featureGroups,
+		);
+
+		const summaryPrompt = buildWeeklySummaryPrompt(
+			entityEvolutionsText,
+			featureGroupsText,
+			prDescriptions,
+		);
+
+		const analysis = await this.client.sendMessage(summaryPrompt);
+
+		if (this.verbose) {
+			console.log(`  Weekly analysis generated (${analysis.length} chars)`);
+		}
+
+		return analysis;
+	}
+
+	/**
+	 * Entity進化をテキスト形式に変換
+	 */
+	private formatEntityEvolutions(
+		evolutions: WeeklyAnalysisResult["entityEvolutions"],
+	): string {
+		const lines: string[] = [];
+
+		for (const evolution of evolutions) {
+			lines.push(`# Entity: ${evolution.entityName}`);
+			lines.push(`ファイル: ${evolution.filePath}`);
+			lines.push(`総PR数: ${evolution.totalPRs}`);
+			lines.push(
+				`破壊的変更: ${evolution.hasBreakingChanges ? "あり" : "なし"}`,
+			);
+
+			if (evolution.consistencyIssues.length > 0) {
+				lines.push("\n問題:");
+				for (const issue of evolution.consistencyIssues) {
+					lines.push(`- ${issue}`);
+				}
+			}
+
+			lines.push("\nタイムライン:");
+			for (let i = 0; i < evolution.steps.length; i++) {
+				const step = evolution.steps[i];
+				lines.push(
+					`${i + 1}. PR #${step.prInfo.number} (${step.timestamp}): ${step.prInfo.title}`,
+				);
+				lines.push(`   カラム数: ${step.change.columns.after.length}`);
+				if (step.change.relations) {
+					lines.push(
+						`   リレーション数: ${step.change.relations.after.length}`,
+					);
+				}
+			}
+
+			lines.push("\n---\n");
+		}
+
+		return lines.join("\n");
+	}
+
+	/**
+	 * 機能グループをテキスト形式に変換
+	 */
+	private formatFeatureGroups(
+		featureGroups: WeeklyAnalysisResult["featureGroups"],
+	): string {
+		const lines: string[] = [];
+
+		for (const group of featureGroups) {
+			lines.push(`# 機能: ${group.featureName}`);
+			lines.push(
+				`関連PR: ${group.relatedPRs.map((pr) => `#${pr.number}`).join(", ")}`,
+			);
+			lines.push(`Entity数: ${group.entities.length}`);
+			lines.push(`DTO数: ${group.dtos.length}`);
+			lines.push(`Controller数: ${group.controllers.length}`);
+
+			if (group.entities.length > 0) {
+				lines.push("\nEntities:");
+				for (const entity of group.entities) {
+					lines.push(`- ${entity.className} (${entity.changeType})`);
+				}
+			}
+
+			if (group.dtos.length > 0) {
+				lines.push("\nDTOs:");
+				for (const dto of group.dtos) {
+					lines.push(`- ${dto.className} (${dto.changeType})`);
+				}
+			}
+
+			if (group.controllers.length > 0) {
+				lines.push("\nControllers:");
+				for (const controller of group.controllers) {
+					lines.push(`- ${controller.className} (${controller.changeType})`);
+				}
+			}
+
+			lines.push("\n---\n");
+		}
+
+		return lines.join("\n");
 	}
 }

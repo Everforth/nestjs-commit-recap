@@ -10,7 +10,9 @@ import { AnthropicClient } from "../ai/anthropic-client.js";
 import { ControllerAnalyzer } from "../analyzers/controller-analyzer.js";
 import { DTOAnalyzer } from "../analyzers/dto-analyzer.js";
 import { EntityAnalyzer } from "../analyzers/entity-analyzer.js";
+import { EntityEvolutionAnalyzer } from "../analyzers/entity-evolution-analyzer.js";
 import { EnumAnalyzer } from "../analyzers/enum-analyzer.js";
+import { FeatureGroupAnalyzer } from "../analyzers/feature-group-analyzer.js";
 import { InterfaceAnalyzer } from "../analyzers/interface-analyzer.js";
 import { MiddlewareAnalyzer } from "../analyzers/middleware-analyzer.js";
 import { ModuleAnalyzer } from "../analyzers/module-analyzer.js";
@@ -19,7 +21,12 @@ import type { PRInfo } from "../git/pr-fetcher.js";
 import { PRFetcher } from "../git/pr-fetcher.js";
 import { GitRepository } from "../git/repository.js";
 import { MarkdownReporter } from "../reporters/markdown-reporter.js";
-import type { AnalysisResult, AnalyzerOptions } from "../types/index.js";
+import { WeeklyReporter } from "../reporters/weekly-reporter.js";
+import type {
+	AnalysisResult,
+	AnalyzerOptions,
+	WeeklyAnalysisResult,
+} from "../types/index.js";
 
 export interface CLIOptions {
 	days: number;
@@ -251,6 +258,143 @@ async function runAnalysis(
 		console.log(markdown);
 	}
 
+	// 週次分析の実行
+	const weeklySpinner = ora("週次分析を実行中...").start();
+
+	try {
+		const entityEvolutionAnalyzer = new EntityEvolutionAnalyzer();
+		const entityEvolutions = entityEvolutionAnalyzer.analyzeEntityEvolutions(
+			entities,
+			allPRs,
+		);
+
+		weeklySpinner.text = "機能グループを分析中...";
+
+		const apiKey = process.env.ANTHROPIC_API_KEY;
+		let featureGroups: WeeklyAnalysisResult["featureGroups"] = [];
+
+		if (apiKey) {
+			const client = new AnthropicClient({ apiKey });
+			const featureGroupAnalyzer = new FeatureGroupAnalyzer();
+			featureGroups = await featureGroupAnalyzer.analyzeFeatureGroups(
+				result,
+				client,
+			);
+		} else {
+			// API キーがない場合は「未分類」として扱う
+			if (allPRs.length > 0) {
+				featureGroups = [
+					{
+						featureName: "未分類",
+						relatedPRs: allPRs,
+						entities,
+						dtos,
+						controllers,
+					},
+				];
+			}
+		}
+
+		const weeklyResult: WeeklyAnalysisResult = {
+			repoPath: resolvedPath,
+			startDate: result.startDate,
+			endDate: result.endDate,
+			entityEvolutions,
+			featureGroups,
+			designMetrics: {
+				entitiesModifiedMultipleTimes: entityEvolutions.filter(
+					(e) => e.totalPRs >= 2,
+				).length,
+				breakingChangeCount: entityEvolutions.filter(
+					(e) => e.hasBreakingChanges,
+				).length,
+				crossPREntityChanges: entityEvolutions.filter(
+					(e) => e.steps.length >= 2,
+				).length,
+				totalPRs: allPRs.length,
+			},
+		};
+
+		// 週次レポート出力
+		const weeklyReporter = new WeeklyReporter();
+		const weeklyMarkdown = weeklyReporter.format(weeklyResult);
+
+		if (options.output) {
+			const weeklyOutputPath = getWeeklyOutputPath(options.output);
+			writeFileSync(weeklyOutputPath, weeklyMarkdown, "utf-8");
+			weeklySpinner.succeed(
+				chalk.green(`週次レポートを出力しました: ${weeklyOutputPath}`),
+			);
+		} else {
+			weeklySpinner.succeed("週次分析完了");
+			console.log("");
+			console.log(chalk.gray("--- 週次レポート ---"));
+			console.log("");
+			console.log(weeklyMarkdown);
+		}
+
+		// 週次AI分析
+		if (apiKey) {
+			const weeklyAISpinner = ora("週次AI分析を実行中...").start();
+
+			try {
+				const client = new AnthropicClient({ apiKey });
+				const aiAnalyzer = new AIAnalyzer(client, options.verbose);
+
+				// PR本文を含むコンテキストを作成
+				const prDescriptions = allPRs
+					.map((pr) => {
+						return `# PR #${pr.number}: ${pr.title}
+URL: ${pr.url}
+マージ日: ${pr.mergedAt || pr.createdAt}
+
+${pr.body || "(本文なし)"}
+
+---
+`;
+					})
+					.join("\n");
+
+				const analysis = await aiAnalyzer.analyzeWeekly(
+					weeklyResult,
+					prDescriptions,
+				);
+
+				const aiReporter = new AIReporter();
+				const weeklyAIReport = aiReporter.formatWeekly(weeklyResult, analysis);
+
+				if (options.output) {
+					const weeklyAIPath = getWeeklyAIOutputPath(options.output);
+					writeFileSync(weeklyAIPath, weeklyAIReport, "utf-8");
+					weeklyAISpinner.succeed(
+						chalk.green(`週次AI分析を出力しました: ${weeklyAIPath}`),
+					);
+				} else {
+					weeklyAISpinner.succeed("週次AI分析完了");
+					console.log("");
+					console.log(chalk.gray("--- 週次AI分析 ---"));
+					console.log("");
+					console.log(weeklyAIReport);
+				}
+			} catch (error) {
+				const errorMessage =
+					error instanceof Error ? error.message : String(error);
+				weeklyAISpinner.warn(
+					`週次AI分析でエラーが発生しました: ${errorMessage}`,
+				);
+				if (options.verbose) {
+					console.error(error);
+				}
+			}
+		}
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		weeklySpinner.warn(`週次分析でエラーが発生しました: ${errorMessage}`);
+		if (options.verbose) {
+			console.error(error);
+		}
+	}
+
 	// AI分析（APIキーがある場合のみ実行）
 	const apiKey = process.env.ANTHROPIC_API_KEY;
 	if (apiKey) {
@@ -295,4 +439,14 @@ async function runAnalysis(
 function getAIOutputPath(originalPath: string): string {
 	const parsed = parse(originalPath);
 	return join(parsed.dir, `${parsed.name}.ai${parsed.ext}`);
+}
+
+function getWeeklyOutputPath(originalPath: string): string {
+	const parsed = parse(originalPath);
+	return join(parsed.dir, `${parsed.name}.weekly${parsed.ext}`);
+}
+
+function getWeeklyAIOutputPath(originalPath: string): string {
+	const parsed = parse(originalPath);
+	return join(parsed.dir, `${parsed.name}.weekly.ai${parsed.ext}`);
 }

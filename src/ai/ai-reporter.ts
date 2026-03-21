@@ -1,3 +1,4 @@
+import type { WeeklyAnalysisResult } from "../types/index.js";
 import type { AIAnalysisResult, AIReporterOptions } from "./types.js";
 
 export class AIReporter {
@@ -30,6 +31,28 @@ export class AIReporter {
 			lines.push("_設計レビューの生成に失敗しました_");
 		}
 		lines.push("");
+
+		return lines.join("\n");
+	}
+
+	/**
+	 * 週次AI分析レポートをフォーマット
+	 */
+	formatWeekly(result: WeeklyAnalysisResult, aiAnalysis: string): string {
+		const lines: string[] = [];
+
+		lines.push("# 週次設計分析レポート");
+		lines.push("");
+		lines.push(`生成日時: ${new Date().toISOString()}`);
+		lines.push(`対象期間: ${result.startDate} ~ ${result.endDate}`);
+		lines.push("");
+		lines.push("---");
+		lines.push("");
+		lines.push(aiAnalysis);
+		lines.push("");
+		lines.push("---");
+		lines.push("");
+		lines.push("生成ツール: commit-recap (週次分析モード)");
 
 		return lines.join("\n");
 	}

@@ -193,3 +193,5 @@ export interface AnalyzerOptions {
 	skipPR?: boolean;
 	verbose?: boolean;
 }
+
+export * from "./weekly-analysis.js";
