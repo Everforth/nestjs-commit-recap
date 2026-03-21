@@ -71,7 +71,8 @@ export class EntityEvolutionAnalyzer {
 				steps.push({
 					prInfo,
 					change,
-					timestamp: prInfo.mergedAt || prInfo.createdAt,
+					timestamp:
+						prInfo.mergedAt || prInfo.createdAt || new Date().toISOString(),
 				});
 			}
 		}
