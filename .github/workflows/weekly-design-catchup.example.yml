@@ -1,7 +1,7 @@
 # 週次設計意思決定レポート自動生成ワークフロー
 #
 # このファイルを `.github/workflows/weekly-design-catchup.yml` としてコピーし、
-# 自分のリポジトリに配置してください。
+# 実行したいリポジトリに配置してください。
 #
 # 必須: ANTHROPIC_API_KEY をリポジトリの Secrets に設定してください
 # Settings → Secrets and variables → Actions → New repository secret
@@ -9,9 +9,9 @@
 name: Weekly Design Catchup
 
 on:
-  # 毎週金曜日の午前3時（JST 12時）に実行
+  # JST 12:00 毎週金曜日に実行（UTCでは -9時間）
   schedule:
-    - cron: '0 9 * * 5'  # UTC時刻で指定（JSTの場合は -9時間）
+    - cron: '0 3 * * 5'
 
   # 手動実行も可能
   workflow_dispatch:
