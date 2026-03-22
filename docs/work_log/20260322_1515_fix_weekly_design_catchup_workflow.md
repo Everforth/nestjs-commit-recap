@@ -7,6 +7,7 @@
 acetokyo-com/nextream-api から weekly-design-catchup ワークフローを実行した際に発生していた以下の問題を修正:
 1. PR数が0になる問題
 2. GitHub Script ステップで "not found error" が発生する問題
+3. PR取得時の権限不足エラー（追加修正）
 
 ## 問題の詳細
 
@@ -88,9 +89,30 @@ run: |
 
 **理由**: `$GITHUB_WORKSPACE` を使用した絶対パスにより、working-directory に依存しない一貫したパスを実現。ディレクトリの事前作成も追加。
 
+#### 変更3: PR取得権限の追加 (Line 36-39) - 追加修正
+
+**Before**:
+```yaml
+permissions:
+  contents: read
+  issues: write
+```
+
+**After**:
+```yaml
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+```
+
+**理由**: GitHub CLI が PR 情報を GraphQL API 経由で取得する際に `pull-requests: read` 権限が必要。この権限がないと "Resource not accessible by integration (repository.pullRequests)" エラーが発生する。
+
+**検証**: https://github.com/acetokyo-com/nextream-api/actions/runs/23397271897/job/68062597889 で権限エラーを確認し修正。
+
 ### ファイル: `src/design-decisions/data-collector.ts`
 
-#### 変更3: PR取得失敗時のエラーログ追加 (Line 158-160)
+#### 変更4: PR取得失敗時のエラーログ追加 (Line 158-160)
 
 **Before**:
 ```typescript
@@ -107,7 +129,7 @@ run: |
 }
 ```
 
-#### 変更4: PR差分取得失敗時のエラーログ追加 (Line 199-206)
+#### 変更5: PR差分取得失敗時のエラーログ追加 (Line 199-206)
 
 **Before**:
 ```typescript
