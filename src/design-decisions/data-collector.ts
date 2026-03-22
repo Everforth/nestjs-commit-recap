@@ -155,7 +155,8 @@ export class DesignDecisionDataCollector {
 			}
 
 			return prsWithDiff;
-		} catch {
+		} catch (error) {
+			console.error("Failed to fetch PRs:", error);
 			return [];
 		}
 	}
@@ -196,8 +197,9 @@ export class DesignDecisionDataCollector {
 			}
 
 			return filesWithDiff;
-		} catch {
+		} catch (error) {
 			// API呼び出しに失敗した場合は差分なしで返す
+			console.error(`Failed to fetch file diffs for PR #${prNumber}:`, error);
 			return files.map((file) => ({
 				path: file.path,
 				additions: file.additions,

@@ -70,9 +70,14 @@ jobs:
         working-directory: commit-recap-tool
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           REPORT_DATE=$(date +%Y%m%d)
-          OUTPUT_PATH="../reports/weekly-design-catchup-${REPORT_DATE}.md"
+          OUTPUT_PATH="${GITHUB_WORKSPACE}/reports/weekly-design-catchup-${REPORT_DATE}.md"
+
+          # reports ディレクトリを作成
+          mkdir -p "${GITHUB_WORKSPACE}/reports"
 
           # レポート生成
           npm run design -- .. -d ${{ inputs.days }} -o "${OUTPUT_PATH}" --verbose
