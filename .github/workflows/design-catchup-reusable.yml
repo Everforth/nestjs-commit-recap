@@ -46,7 +46,7 @@ jobs:
       - name: Checkout commit-recap tool
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository_owner }}/commit-recap
+          repository: Everforth/nestjs-commit-recap
           ref: main
           path: commit-recap-tool
 
@@ -110,7 +110,7 @@ jobs:
 
             ---
 
-            **自動生成レポート**: このレポートは [commit-recap](https://github.com/${{ github.repository_owner }}/commit-recap) により自動生成されました。
+            **自動生成レポート**: このレポートは [commit-recap](https://github.com/Everforth/nestjs-commit-recap) により自動生成されました。
             **生成日時**: ${new Date().toISOString()}
             **対象期間**: 過去 ${{ inputs.days }} 日間`;
 
