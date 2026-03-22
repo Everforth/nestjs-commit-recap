@@ -110,7 +110,7 @@ jobs:
 
             ---
 
-            **自動生成レポート**: このレポートは [commit-recap](https://github.com/Everforth/nestjs-commit-recap) により自動生成されました。
+            **自動生成レポート**: このレポートは [nestjs-commit-recap](https://github.com/Everforth/nestjs-commit-recap) により自動生成されました。
             **生成日時**: ${new Date().toISOString()}
             **対象期間**: 過去 ${{ inputs.days }} 日間`;
 
