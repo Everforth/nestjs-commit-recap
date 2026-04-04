@@ -27,36 +27,9 @@
 
 ### 2. ワークフローファイルの配置
 
-`.github/workflows/weekly-design-catchup.yml` を作成し、以下の内容を記述します:
+commit-recap リポジトリの `weekly-design-catchup.yml` を対象リポジトリの `.github/workflows/` ディレクトリにコピーします。
 
-```yaml
-name: Weekly Design Catchup
-
-on:
-  # 毎週月曜日の午前9時（JST 18時）に実行
-  schedule:
-    - cron: '0 9 * * 1'  # UTC時刻で指定
-
-  # 手動実行も可能
-  workflow_dispatch:
-    inputs:
-      days:
-        description: 'Number of days to analyze'
-        required: false
-        default: '7'
-
-jobs:
-  weekly-report:
-    # commit-recap リポジトリの再利用可能なワークフローを呼び出し
-    uses: Everforth/commit-recap/.github/workflows/design-catchup-reusable.yml@main
-    secrets:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-    with:
-      days: ${{ github.event.inputs.days || 7 }}
-      issue_labels: 'design-review,weekly-report,automated'
-```
-
-**注意**: `Everforth/commit-recap` の部分は、実際の commit-recap リポジトリのオーナー名とリポジトリ名に置き換えてください。
+**注意**: コピー後、ファイル内の `schedule` の cron 式を必要に応じて書き換えてください（デフォルト: 毎週金曜日 JST 12:00）。
 
 ### 3. ワークフローの有効化
 

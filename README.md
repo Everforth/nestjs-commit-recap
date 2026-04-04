@@ -1,106 +1,18 @@
 # commit-recap
 
-NestJSプロジェクトの直近の構造変化をMarkdown形式でレポートするCLIツール。
+**週次設計レビューを自動化するGitHub Actionsツール**
 
-## 概要
+NestJSプロジェクトのリポジトリに設置することで、設計に影響する変更をドメイン別に整理したレポートを週次で自動生成し、Issueとして投稿します。CTOや設計レビュアーが設計意思決定をキャッチアップするために最適化されています。
 
-Gitリポジトリの差分を解析し、NestJSの構造的な変更（Entity、Module、Controller、Provider、Middleware類）を検出してレポートを生成します。
+## Weekly Design Catchup - GitHub Actions自動実行
 
-## AI分析機能
+設計意思決定レポートを GitHub Actions で週次自動生成し、Issue として投稿する機能です。
 
-Anthropic APIを使った2段階のAI分析機能により、変更レポートの自動解析が可能です。
+### やること
 
-### 機能
-
-**実装意図ベースの変更サマリー生成**
-- **PR本文を活用**: GitHub PRの本文（Description）から実装意図を抽出
-- **機能単位でグループ化**: Entity、DTO、Controller、Serviceなどの関連変更を実装意図ごとにまとめて表示
-- **高レベルなサマリー**: カラムやプロパティの詳細列挙を避け、機能レベルで変更内容を要約
-- **影響範囲の明記**: 破壊的変更（DBマイグレーション、API変更等）がある場合は明記
-
-**設計レビュー候補生成**
-- 命名・概念の観点からの確認ポイント
-- 構造・モデリングの観点からの確認ポイント
-- エンドポイント設計の観点からの確認ポイント
-- PR本文の実装意図に沿わない実装がないかを確認
-
-#### 出力例
-
-```markdown
-## 【リファクタリング】connection モジュールの DTO・サービス整理
-
-**関連PR**: [#128](https://github.com/.../pull/128)
-
-**実装意図**:
-SNS search DTO のネスト構造を解消し、パラメータを統一。
-カスタムステータスサービスを分離して保守性を向上。
-
-**変更内容**:
-- **Entity**: CompanyInfluencerConnection から未使用カラムを削除
-- **DTO**: connection DTO をフラット化、Create/Update DTOを分離
-- **Controller**: stats/campaigns エンドポイントを influencer モジュールに移行
-- **Service**: InfluencerConnectionCustomStatusesService を新規作成
-
-**影響範囲**:
-- フロントエンドでのリクエストボディ構造変更が必要
-```
-
-### 使い方
-
-#### 1. 前提条件
-
-**必須**:
-- Anthropic APIキーの取得（[Console](https://console.anthropic.com/)から取得）
-- GitHub CLIのインストールと認証（PR本文を取得するため）
-  ```bash
-  # gh CLIのインストール確認
-  gh --version
-
-  # 認証（未認証の場合）
-  gh auth login
-  ```
-
-#### 2. 環境変数の設定
-
-`.env` ファイルを作成して環境変数を設定:
-```bash
-# .env
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
-または、環境変数を直接設定:
-```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-```
-
-#### 3. 実行
-
-APIキーとgh CLIがあれば自動的にAI分析を実行します:
-```bash
-# 開発モード（推奨）
-npm run dev -- /path/to/repo -o report.md
-
-# ビルド後
-npm run build
-npm start -- /path/to/repo -o report.md
-```
-
-#### 4. 出力ファイル
-
-- `report.md` - 構造的な変更レポート（詳細な差分）
-- `report.ai.md` - AI分析レポート（実装意図ベースのサマリーと設計レビュー）
-
-**注意**:
-- APIキーが設定されていない場合、AI分析はスキップされ、`report.md`のみが生成されます
-- gh CLIが認証されていない場合、PR情報（PR本文を含む）は取得されませんが、コードの変更から実装意図を推測してAI分析を実行します
-
-## 設計意思決定レポート（CTO向け）
-
-CTOが設計上の意思決定をキャッチアップするための専用レポート生成機能です。
-通常の変更レポートとは別に、設計に影響する変更を抽出し、ドメイン別に整理したレポートを生成します。
-
-### 特徴
-
+- **週1回の自動実行**でレポートを生成
+- 生成されたレポートを自動的に **Issue として投稿**
+- commit-recap リポジトリのワークフローを再利用（設定ファイルの更新に自動対応）
 - **設計に影響する変更を自動抽出**: DB スキーマ、API エンドポイント、ドメインモデル等の重要な変更のみを対象
 - **ドメイン別に整理**: 変更をドメイン/コンテキストごとに分類して表示
 - **意思決定を4つの観点で整理**:
@@ -108,11 +20,46 @@ CTOが設計上の意思決定をキャッチアップするための専用レ�
   - データ構造の変化
   - 責務・境界の変化
   - 新たな概念・用語
-- **1コマンドで完結**: データ収集からレポート生成まで一括実行
 
-### 使い方
+### セットアップ方法
 
-#### 基本的な使い方（推奨）
+1. 対象リポジトリの Secrets に `ANTHROPIC_API_KEY` を設定
+2. このリポジトリの `weekly-design-catchup.yml` を対象リポジトリの `.github/workflows/` にコピー
+3. コピーしたファイル内の `schedule` の cron 式を必要に応じて書き換え（デフォルト: 毎週金曜日 JST 12:00）
+
+詳細は [GitHub Actions 統合ガイド](./docs/github-actions-integration.md) を参照してください。
+
+### 対象となる変更
+
+以下のカテゴリに該当する変更が抽出されます:
+
+- **DB スキーマ変更**: migration、schema定義、.prisma、.sqlファイル
+- **API エンドポイント**: controller、route、api関連ファイル
+- **ドメインモデル・エンティティ**: entity、domain、model関連ファイル
+- **状態管理・データフロー**: store、state、redux、zustand等
+- **外部サービス連携**: integration、external、service、client関連ファイル
+- **リファクタリング**: 責務の再分割・抽象化を伴う変更
+
+### 除外される変更
+
+- ライブラリバージョン更新のみ
+- テキスト・コピーの修正
+- スタイル・フォーマットのみ
+- CI/CDの軽微な調整
+- テストファイルのみの変更
+
+## ローカルでのCLI実行（開発・デバッグ用）
+
+GitHub Actionsを使わず、ローカルでレポートを生成することも可能です。
+
+### セットアップ
+
+```bash
+# 依存関係のインストール
+npm install
+```
+
+### 基本的な使い方
 
 1コマンドでデータ収集からレポート生成まで実行します:
 
@@ -134,7 +81,7 @@ design-catchup <repo-path> -d 7
 - `--api-key <key>`: Anthropic APIキー（環境変数より優先）
 - `--verbose`: 詳細ログを表示
 
-#### 実行例
+### 実行例
 
 ```bash
 # 基本的な実行（カレントディレクトリを対象）
@@ -147,7 +94,7 @@ npm run design -- /path/to/another/repo -d 14
 npm run design -- . -d 7 --save-data ./debug-data.json --verbose
 ```
 
-#### 詳細: 2段階での実行（デバッグ用）
+### 2段階での実行（デバッグ用）
 
 データ収集とレポート生成を別々に実行することも可能です:
 
@@ -167,236 +114,11 @@ npm run design:generate ./design-data.json -o ./reports
 npm run design:generate ./design-data.json -r /path/to/another/repo -o ./reports
 ```
 
-### 対象となる変更
-
-以下のカテゴリに該当する変更が抽出されます:
-
-- **DB スキーマ変更**: migration、schema定義、.prisma、.sqlファイル
-- **API エンドポイント**: controller、route、api関連ファイル
-- **ドメインモデル・エンティティ**: entity、domain、model関連ファイル
-- **状態管理・データフロー**: store、state、redux、zustand等
-- **外部サービス連携**: integration、external、service、client関連ファイル
-- **リファクタリング**: 責務の再分割・抽象化を伴う変更
-
-### 除外される変更
-
-- ライブラリバージョン更新のみ
-- テキスト・コピーの修正
-- スタイル・フォーマットのみ
-- CI/CDの軽微な調整
-- テストファイルのみの変更
-
-### GitHub Actions での自動実行
-
-設計意思決定レポートを GitHub Actions で週次自動生成し、Issue として投稿できます。
-
-**特徴**:
-- 週1回の自動実行でレポートを生成
-- 生成されたレポートを自動的に Issue として投稿
-- commit-recap リポジトリのワークフローを再利用（設定ファイルの更新に自動対応）
-
-**セットアップ方法**:
-
-1. リポジトリの Secrets に `ANTHROPIC_API_KEY` を設定
-2. `.github/workflows/weekly-design-catchup.yml` を作成:
-
-```yaml
-name: Weekly Design Catchup
-
-on:
-  schedule:
-    - cron: '0 9 * * 1'  # 毎週月曜日 09:00 UTC
-  workflow_dispatch:
-
-jobs:
-  weekly-report:
-    uses: <owner>/commit-recap/.github/workflows/design-catchup-reusable.yml@main
-    secrets:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-    with:
-      days: 7
-      issue_labels: 'design-review,weekly-report'
-```
-
-詳細は [GitHub Actions 統合ガイド](./docs/github-actions-integration.md) を参照してください。
-
-### レポート形式
-
-生成されるレポートには以下の内容が含まれます:
-
-```markdown
-# 週次設計意思決定キャッチアップ
-**対象期間:** YYYY/MM/DD 〜 YYYY/MM/DD
-
-## 今週の概観
-（どのドメインで何が決まったかを3〜5文で概述）
-
-## ドメイン別 意思決定サマリー
-
-### [ドメイン名]
-
-#### 確定したビジネスルール
-- （決定内容） ← [#PR番号](url)
-
-#### データ構造の変化
-| 対象 | 変更前 | 変更後 |
-|------|--------|--------|
-| ... | ... | ... |
-
-#### 責務・境界の変化
-- （どの処理がどこからどこへ移ったか）
-
-#### 新たな概念・用語
-| 用語 | 意味・定義 |
-|------|-----------|
-| ... | ... |
-
-#### この設計が前提としていること
-- （暗黙の仮定・制限・将来変わりうる前提）
-
-## 把握できなかった意図
-（PR説明不足などで背景が読み取れなかった変更）
-```
-
-## セットアップ
-
-```bash
-# 依存関係のインストール
-npm install
-
-# ビルド（本番使用時のみ必要）
-npm run build
-```
-
-**注意**: 開発時は`npm run dev`で直接実行できるため、ビルドは不要です。
-
-## 基本的な使い方
-
-### 実行方法
-
-#### 方法1: 開発モード（推奨、ビルド不要）
-```bash
-# tsxを使って直接実行（最も簡単）
-npm run dev -- /path/to/nestjs-repo
-```
-
-#### 方法2: ビルド後に実行
-```bash
-# 1. ビルド
-npm run build
-
-# 2. 実行
-npm start -- /path/to/nestjs-repo
-# または
-node dist/index.js /path/to/nestjs-repo
-```
-
-#### 方法3: グローバルインストール
-```bash
-# 1. インストール
-npm install -g .
-
-# 2. どこからでも実行可能
-commit-recap /path/to/nestjs-repo
-```
-
-### オプション例
-
-```bash
-# ファイルに出力
-npm run dev -- /path/to/nestjs-repo -o report.md
-
-# 期間を指定（14日間）
-npm run dev -- /path/to/nestjs-repo -d 14
-
-# 詳細ログを表示
-npm run dev -- /path/to/nestjs-repo --verbose
-
-# すべてのオプションを組み合わせ
-npm run dev -- /path/to/nestjs-repo -d 14 -o report.md --verbose
-```
-
-### 完全な実行例（AI分析機能付き）
-
-```bash
-# 環境変数を設定
-export ANTHROPIC_API_KEY=sk-ant-...
-
-# gh CLIの認証確認
-gh auth status
-
-# 実行（開発モード）
-npm run dev -- ../my-nestjs-project -d 7 -o /tmp/report.md
-
-# 出力:
-# ✔ 解析完了
-# レポートを出力しました: /tmp/report.md
-# ✔ AI分析を出力しました: /tmp/report.ai.md
-```
-
-## CLI オプション
-
-| オプション | 説明 | デフォルト |
-|-----------|------|-----------|
-| `-d, --days <number>` | 期間（日数） | 7 |
-| `-o, --output <path>` | 出力ファイルパス | 標準出力 |
-| `-b, --branch <name>` | 対象ブランチ | 現在のブランチ |
-| `--no-pr` | PR情報をスキップ | PR情報を取得 |
-| `--verbose` | 詳細ログ | false |
-
-## 検出対象
-
-### データモデル・設計
-- **Entity**: `*.entity.ts`, `@Entity()`, `@Column()` など
-- **Module**: `*.module.ts`, `@Module()` デコレータ
-- **Endpoint**: `*.controller.ts`, HTTPメソッドデコレータ
-
-### NestJSレイヤー構造
-- **Provider**: `*.service.ts`, `*.repository.ts`, `@Injectable()`
-- **Middleware**: `*.middleware.ts`, `NestMiddleware`
-- **Guard**: `*.guard.ts`, `CanActivate`
-- **Interceptor**: `*.interceptor.ts`, `NestInterceptor`
-- **Pipe**: `*.pipe.ts`, `PipeTransform`
-- **Filter**: `*.filter.ts`, `ExceptionFilter`
-
-## 出力形式
-
-### report.md（構造的な変更レポート）
-
-Markdown形式で、変更をサマリーと詳細の2セクションで出力します。
-
-- サマリー: 追加(+)、削除(-)、変更(~)を表形式で一覧表示
-- 詳細: 各ファイルの変更内容を変更前/変更後の比較表で表示
-- 関連PR: gh CLIが利用可能な場合、関連するPRへのリンクを表示
-
-### report.ai.md（AI分析レポート）
-
-AI分析により、以下の情報を含むレポートを生成します：
-
-1. **実装意図ベースの変更サマリー**
-   - PR本文から実装意図を抽出
-   - 関連する全ての変更（Entity、DTO、Controller、Serviceなど）を機能単位でグループ化
-   - 機能レベルでの変更内容サマリー
-   - 影響範囲（破壊的変更など）
-
-2. **設計レビュー候補**
-   - 命名・概念の観点からの確認ポイント
-   - 構造・モデリングの観点からの確認ポイント
-   - エンドポイント設計の観点からの確認ポイント
-
-**特徴**:
-- カラムやプロパティの詳細列挙を避け、読みやすさを重視
-- PR本文がない場合でも、コードの変更から実装意図を推測
-- 同じPRに関連する変更は必ず同じグループにまとめて表示
-
 ## 必須要件
 
 - Node.js 18以上
 - Git
-
-## 推奨要件（AI分析機能用）
-
-- **Anthropic APIキー**: AI分析機能を使用する場合に必要
+- **Anthropic APIキー**: AI分析機能を使用する場合に必要（[Console](https://console.anthropic.com/)から取得）
 - **GitHub CLI (gh)**: PR本文を取得してAI分析の精度を向上させるために推奨
   - インストール: `brew install gh` (macOS) / [GitHub CLI](https://cli.github.com/)
   - 認証: `gh auth login`
@@ -419,50 +141,3 @@ AI分析により、以下の情報を含むレポートを生成します：
 | dotenv | 環境変数読み込み |
 | tsup | ESMビルド |
 | tsx | 開発時実行 |
-
-## ディレクトリ構造
-
-```
-commit-recap/
-├── src/
-│   ├── index.ts                    # CLIエントリーポイント
-│   ├── cli/
-│   │   └── commands.ts             # CLIコマンド定義
-│   ├── git/
-│   │   ├── repository.ts           # Git操作
-│   │   └── pr-fetcher.ts           # PR情報取得
-│   ├── analyzers/
-│   │   ├── base-analyzer.ts        # 基底クラス
-│   │   ├── entity-analyzer.ts      # Entity検出
-│   │   ├── module-analyzer.ts      # Module検出
-│   │   ├── controller-analyzer.ts  # Controller/Endpoint検出
-│   │   ├── provider-analyzer.ts    # Service/Repository検出
-│   │   └── middleware-analyzer.ts  # Middleware類検出
-│   ├── ai/
-│   │   ├── types.ts                # AI関連型定義
-│   │   ├── prompts.ts              # プロンプトテンプレート
-│   │   ├── anthropic-client.ts     # Anthropic APIクライアント
-│   │   ├── ai-analyzer.ts          # AI分析オーケストレーター
-│   │   └── ai-reporter.ts          # AI分析結果整形
-│   ├── design-decisions/
-│   │   ├── types.ts                # 設計意思決定の型定義
-│   │   ├── data-collector.ts       # データ収集クラス
-│   │   ├── prompts.ts              # レポート生成プロンプト
-│   │   ├── report-generator.ts     # レポート生成クラス
-│   │   ├── collect-cli.ts          # データ収集CLI
-│   │   └── generate-cli.ts         # レポート生成CLI
-│   ├── reporters/
-│   │   └── markdown-reporter.ts    # Markdown生成
-│   ├── types/
-│   │   └── index.ts                # 型定義
-│   └── utils/
-│       └── file-classifier.ts      # ファイル分類
-├── docs/
-│   ├── work_log/                    # 機能追加・変更の作業記録
-│   └── todos/                       # TODO管理
-├── .env.example                     # 環境変数のサンプル
-├── CLAUDE.md                        # Claude Code作業ガイドライン
-├── package.json
-├── tsconfig.json
-└── tsup.config.ts
-```
