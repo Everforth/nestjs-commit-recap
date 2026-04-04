@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import chalk from "chalk";
 import type { AIAnalysisOptions } from "./types.js";
 
 export class AnthropicClient {
@@ -34,6 +35,20 @@ export class AnthropicClient {
 					},
 				],
 			});
+
+			// 切り詰め検出
+			if (message.stop_reason === "max_tokens") {
+				console.warn(
+					chalk.yellow(
+						`\n⚠️  警告: AIレスポンスが最大トークン数 (${this.maxTokens}) に達したため、出力が途中で切り詰められた可能性があります。`,
+					),
+				);
+				console.warn(
+					chalk.yellow(
+						`    より長い出力が必要な場合は --max-tokens オプションで値を増やしてください。`,
+					),
+				);
+			}
 
 			// Extract text content from the response
 			const textContent = message.content.find(

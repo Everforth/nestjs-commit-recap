@@ -24,6 +24,7 @@ program
 	.option("--skip-diffs", "PR差分の取得をスキップ（高速化）", false)
 	.option("--api-key <key>", "Anthropic APIキー（環境変数より優先）")
 	.option("--verbose", "詳細ログ", false)
+	.option("--max-tokens <number>", "AI出力の最大トークン数", "64000")
 	.action(
 		async (
 			repoPath: string,
@@ -34,6 +35,7 @@ program
 				skipDiffs: boolean;
 				apiKey?: string;
 				verbose: boolean;
+				maxTokens: string;
 			},
 		) => {
 			const resolvedPath = resolve(repoPath);
@@ -95,7 +97,7 @@ program
 
 				const client = new AnthropicClient({
 					apiKey,
-					maxTokens: 8192,
+					maxTokens: Number.parseInt(options.maxTokens, 10),
 					timeout: 180000, // 3分
 				});
 				const generator = new DesignDecisionReportGenerator(client);
