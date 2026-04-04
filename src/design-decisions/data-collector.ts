@@ -1,5 +1,10 @@
 import { execSync } from "node:child_process";
 import simpleGit, { type SimpleGit } from "simple-git";
+import { DTOAnalyzer } from "../analyzers/dto-analyzer.js";
+import { EntityAnalyzer } from "../analyzers/entity-analyzer.js";
+import { PRFetcher } from "../git/pr-fetcher.js";
+import { GitRepository } from "../git/repository.js";
+import type { DTOChange, EntityChange, PRInfo } from "../types/index.js";
 import type {
 	ChangeCategory,
 	CommitChange,
@@ -36,6 +41,75 @@ export class DesignDecisionDataCollector {
 		const targetChanges = await this.filterAndEnrichChanges(commits, prs);
 		this.onProgress?.(`対象変更 ${targetChanges.length}件を抽出`);
 
+		// エンティティとDTOの分析を実行
+		let entityChanges: EntityChange[] | undefined;
+		let dtoChanges: DTOChange[] | undefined;
+		try {
+			this.onProgress?.("エンティティとDTOを分析中...");
+
+			// GitRepository と PRFetcher を作成
+			const repo = new GitRepository(this.repoPath);
+			const prFetcher = new PRFetcher(this.repoPath);
+
+			// PRInfo形式に変換
+			const prInfos: PRInfo[] = prs.map((pr) => ({
+				number: pr.number,
+				title: pr.title,
+				url: pr.url,
+				mergedAt: pr.mergedAt,
+			}));
+
+			// アナライザーを作成
+			const analyzerOptions = { days, verbose: false };
+			const entityAnalyzer = new EntityAnalyzer(
+				repo,
+				prFetcher,
+				analyzerOptions,
+			);
+			const dtoAnalyzer = new DTOAnalyzer(repo, prFetcher, analyzerOptions);
+
+			// fileToPRs マップを作成
+			const { added, deleted, modified } = await repo.getDiffFiles(
+				days,
+				analyzerOptions.branch,
+			);
+			const allChangedFiles = [...added, ...deleted, ...modified];
+			const fileToPRs = new Map<string, PRInfo[]>();
+			for (const file of allChangedFiles) {
+				const relatedPRs = prInfos.filter((pr) =>
+					prs
+						.find((p) => p.number === pr.number)
+						?.files.some((f) => f.path === file),
+				);
+				if (relatedPRs.length > 0) {
+					fileToPRs.set(file, relatedPRs);
+				}
+			}
+
+			entityAnalyzer.setFileToPRs(fileToPRs);
+			dtoAnalyzer.setFileToPRs(fileToPRs);
+
+			const [entities, dtos] = await Promise.all([
+				entityAnalyzer.analyze(),
+				dtoAnalyzer.analyze(),
+			]);
+
+			// targetChanges に含まれるファイルのみをフィルタ
+			const targetFiles = new Set(targetChanges.flatMap((c) => c.files));
+			entityChanges = entities.filter((e) => targetFiles.has(e.file));
+			dtoChanges = dtos.filter((d) => targetFiles.has(d.file));
+
+			this.onProgress?.(
+				`エンティティ ${entityChanges.length}件、DTO ${dtoChanges.length}件を分析`,
+			);
+		} catch (error) {
+			console.warn(
+				"Entity/DTO analysis failed, falling back to raw diff:",
+				error,
+			);
+			// エラーが発生しても続行（従来の生diffで対応）
+		}
+
 		return {
 			repoPath: this.repoPath,
 			period: {
@@ -45,6 +119,8 @@ export class DesignDecisionDataCollector {
 			commits,
 			prs,
 			targetChanges,
+			entityChanges,
+			dtoChanges,
 		};
 	}
 

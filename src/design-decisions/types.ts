@@ -38,6 +38,8 @@ export type ChangeCategory =
 	| "refactoring"
 	| "other";
 
+import type { DTOChange, EntityChange } from "../types/index.js";
+
 export interface DesignDecisionData {
 	repoPath: string;
 	period: {
@@ -47,4 +49,6 @@ export interface DesignDecisionData {
 	commits: CommitChange[];
 	prs: PRDetail[];
 	targetChanges: DomainChange[];
+	entityChanges?: EntityChange[];
+	dtoChanges?: DTOChange[];
 }

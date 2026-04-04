@@ -15,6 +15,20 @@ export interface EntityRelation {
 	targetEntity: string;
 }
 
+export interface EntityIndex {
+	columns: string[];
+	unique?: boolean;
+	name?: string;
+}
+
+export interface EntityForeignKey {
+	relationName: string;
+	relationType: "ManyToOne" | "OneToMany" | "OneToOne" | "ManyToMany";
+	targetEntity: string;
+	onDelete?: string;
+	onUpdate?: string;
+}
+
 export interface EntityChange {
 	file: string;
 	oldFile?: string; // 移動元のパス（moved の場合）
@@ -27,6 +41,14 @@ export interface EntityChange {
 	relations?: {
 		before: EntityRelation[];
 		after: EntityRelation[];
+	};
+	indexes?: {
+		before: EntityIndex[];
+		after: EntityIndex[];
+	};
+	foreignKeys?: {
+		before: EntityForeignKey[];
+		after: EntityForeignKey[];
 	};
 	relatedPRs: PRInfo[];
 }

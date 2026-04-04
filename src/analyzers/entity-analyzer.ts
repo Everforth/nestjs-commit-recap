@@ -1,7 +1,9 @@
-import { Node, type PropertyDeclaration } from "ts-morph";
+import { type Decorator, Node, type PropertyDeclaration } from "ts-morph";
 import type {
 	EntityChange,
 	EntityColumn,
+	EntityForeignKey,
+	EntityIndex,
 	EntityRelation,
 } from "../types/index.js";
 import { classifyFile } from "../utils/file-classifier.js";
@@ -58,6 +60,10 @@ export class EntityAnalyzer extends BaseAnalyzer {
 			const afterColumns = this.extractColumns(afterContent);
 			const beforeRelations = this.extractRelations(beforeContent);
 			const afterRelations = this.extractRelations(afterContent);
+			const beforeIndexes = this.extractIndexes(beforeContent);
+			const afterIndexes = this.extractIndexes(afterContent);
+			const beforeForeignKeys = this.extractForeignKeys(beforeContent);
+			const afterForeignKeys = this.extractForeignKeys(afterContent);
 
 			this.log(`Found entity: ${className} (${changeType})`);
 
@@ -72,6 +78,14 @@ export class EntityAnalyzer extends BaseAnalyzer {
 				relations: {
 					before: beforeRelations,
 					after: afterRelations,
+				},
+				indexes: {
+					before: beforeIndexes,
+					after: afterIndexes,
+				},
+				foreignKeys: {
+					before: beforeForeignKeys,
+					after: afterForeignKeys,
 				},
 				relatedPRs: this.getPRsForFile(file),
 			});
@@ -100,6 +114,10 @@ export class EntityAnalyzer extends BaseAnalyzer {
 			const afterColumns = this.extractColumns(afterContent);
 			const beforeRelations = this.extractRelations(beforeContent);
 			const afterRelations = this.extractRelations(afterContent);
+			const beforeIndexes = this.extractIndexes(beforeContent);
+			const afterIndexes = this.extractIndexes(afterContent);
+			const beforeForeignKeys = this.extractForeignKeys(beforeContent);
+			const afterForeignKeys = this.extractForeignKeys(afterContent);
 
 			this.log(`Found entity: ${className} (moved: ${from} -> ${to})`);
 
@@ -115,6 +133,14 @@ export class EntityAnalyzer extends BaseAnalyzer {
 				relations: {
 					before: beforeRelations,
 					after: afterRelations,
+				},
+				indexes: {
+					before: beforeIndexes,
+					after: afterIndexes,
+				},
+				foreignKeys: {
+					before: beforeForeignKeys,
+					after: afterForeignKeys,
 				},
 				relatedPRs: [...this.getPRsForFile(from), ...this.getPRsForFile(to)],
 			});
@@ -344,5 +370,182 @@ export class EntityAnalyzer extends BaseAnalyzer {
 		}
 
 		return { name, relationType, targetEntity };
+	}
+
+	/**
+	 * エンティティクラスからインデックス情報を抽出
+	 * @Index デコレータを解析
+	 */
+	private extractIndexes(content: string | null): EntityIndex[] {
+		if (!content) return [];
+
+		try {
+			const sourceFile = this.parseContent(content, "entity-indexes.ts");
+			const cls = this.findClassWithDecorator(sourceFile, "Entity");
+			if (!cls) return [];
+
+			const indexes: EntityIndex[] = [];
+			const decorators = cls.getDecorators();
+
+			// クラスレベルの @Index デコレータ
+			for (const decorator of decorators) {
+				if (decorator.getName() === "Index") {
+					const indexInfo = this.extractIndexFromDecorator(decorator);
+					if (indexInfo) {
+						indexes.push(indexInfo);
+					}
+				}
+			}
+
+			return indexes;
+		} catch {
+			return [];
+		}
+	}
+
+	/**
+	 * @Index デコレータから情報を抽出
+	 */
+	private extractIndexFromDecorator(decorator: Decorator): EntityIndex | null {
+		const args = decorator.getArguments();
+		if (args.length === 0) return null;
+
+		let columns: string[] = [];
+		let unique = false;
+		let name: string | undefined;
+
+		// 第1引数: カラム名の配列または文字列
+		const firstArg = args[0];
+		if (Node.isArrayLiteralExpression(firstArg)) {
+			columns = firstArg.getElements().map((el) => {
+				const text = el.getText().replace(/['"]/g, "");
+				return text;
+			});
+		} else if (Node.isStringLiteral(firstArg)) {
+			columns = [firstArg.getLiteralValue()];
+		}
+
+		// 第2引数: オプション { unique: boolean, name: string }
+		if (args.length > 1 && Node.isObjectLiteralExpression(args[1])) {
+			const options = args[1];
+			for (const prop of options.getProperties()) {
+				if (Node.isPropertyAssignment(prop)) {
+					const propName = prop.getName();
+					const init = prop.getInitializer();
+					if (!init) continue;
+
+					if (propName === "unique" && init.getText() === "true") {
+						unique = true;
+					}
+					if (propName === "name" && Node.isStringLiteral(init)) {
+						name = init.getLiteralValue();
+					}
+				}
+			}
+		}
+
+		if (columns.length === 0) return null;
+
+		return { columns, unique, name };
+	}
+
+	/**
+	 * エンティティクラスから外部キー情報を抽出
+	 * リレーションデコレータのオプションから onDelete/onUpdate を取得
+	 */
+	private extractForeignKeys(content: string | null): EntityForeignKey[] {
+		if (!content) return [];
+
+		try {
+			const sourceFile = this.parseContent(content, "entity-fks.ts");
+			const cls = this.findClassWithDecorator(sourceFile, "Entity");
+			if (!cls) return [];
+
+			const foreignKeys: EntityForeignKey[] = [];
+			const properties = cls.getProperties();
+
+			for (const prop of properties) {
+				const fkInfo = this.extractForeignKeyFromProperty(prop);
+				if (fkInfo) {
+					foreignKeys.push(fkInfo);
+				}
+			}
+
+			return foreignKeys;
+		} catch {
+			return [];
+		}
+	}
+
+	/**
+	 * プロパティから外部キー情報を抽出
+	 * ManyToOne, OneToOne などのリレーションから FK 制約を取得
+	 */
+	private extractForeignKeyFromProperty(
+		prop: PropertyDeclaration,
+	): EntityForeignKey | null {
+		const decorators = prop.getDecorators();
+		const relationDecorator = decorators.find((d) =>
+			this.relationDecorators.includes(
+				d.getName() as (typeof this.relationDecorators)[number],
+			),
+		);
+
+		if (!relationDecorator) return null;
+
+		// ManyToOne と OneToOne のみが外部キーを持つ（N側）
+		const relationType =
+			relationDecorator.getName() as EntityForeignKey["relationType"];
+		if (relationType !== "ManyToOne" && relationType !== "OneToOne") {
+			return null;
+		}
+
+		const relationName = prop.getName();
+
+		// ターゲットエンティティを取得
+		let targetEntity = "unknown";
+		const args = relationDecorator.getArguments();
+		if (args.length > 0) {
+			const firstArg = args[0];
+			if (Node.isArrowFunction(firstArg)) {
+				const body = firstArg.getBody();
+				if (Node.isIdentifier(body)) {
+					targetEntity = body.getText();
+				}
+			}
+			if (Node.isIdentifier(firstArg)) {
+				targetEntity = firstArg.getText();
+			}
+		}
+
+		// オプションから onDelete, onUpdate を取得
+		let onDelete: string | undefined;
+		let onUpdate: string | undefined;
+
+		if (args.length > 1 && Node.isObjectLiteralExpression(args[1])) {
+			const options = args[1];
+			for (const propAssign of options.getProperties()) {
+				if (Node.isPropertyAssignment(propAssign)) {
+					const propName = propAssign.getName();
+					const init = propAssign.getInitializer();
+					if (!init) continue;
+
+					if (propName === "onDelete" && Node.isStringLiteral(init)) {
+						onDelete = init.getLiteralValue();
+					}
+					if (propName === "onUpdate" && Node.isStringLiteral(init)) {
+						onUpdate = init.getLiteralValue();
+					}
+				}
+			}
+		}
+
+		return {
+			relationName,
+			relationType,
+			targetEntity,
+			onDelete,
+			onUpdate,
+		};
 	}
 }
