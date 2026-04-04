@@ -132,7 +132,7 @@ JSON形式で出力してください。PRの番号をキーとし、キーワ�
 				if (!featureMap.has(keyword)) {
 					featureMap.set(keyword, new Set());
 				}
-				featureMap.get(keyword)!.add(prNumber);
+				featureMap.get(keyword)?.add(prNumber);
 			}
 		}
 

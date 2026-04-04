@@ -1,6 +1,5 @@
 import type {
 	EntityEvolution,
-	EntityEvolutionStep,
 	FeatureGroup,
 	WeeklyAnalysisResult,
 } from "../types/index.js";
