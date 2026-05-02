@@ -1,5 +1,3 @@
-import type { MiddlewareType } from "../types/index.js";
-
 export type FileType =
 	| "entity"
 	| "dto"
@@ -56,34 +54,4 @@ export function classifyFile(filePath: string): FileType {
 	}
 
 	return "other";
-}
-
-export function isNestJSFile(filePath: string): boolean {
-	const type = classifyFile(filePath);
-	return type !== "other";
-}
-
-export function isProviderFile(filePath: string): boolean {
-	const type = classifyFile(filePath);
-	return type === "service" || type === "repository";
-}
-
-export function isMiddlewareTypeFile(filePath: string): boolean {
-	const type = classifyFile(filePath);
-	return ["middleware", "guard", "interceptor", "pipe", "filter"].includes(
-		type,
-	);
-}
-
-export function fileTypeToMiddlewareType(
-	fileType: FileType,
-): MiddlewareType | null {
-	const mapping: Partial<Record<FileType, MiddlewareType>> = {
-		middleware: "middleware",
-		guard: "guard",
-		interceptor: "interceptor",
-		pipe: "pipe",
-		filter: "filter",
-	};
-	return mapping[fileType] ?? null;
 }
