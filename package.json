@@ -1,18 +1,14 @@
 {
 	"name": "commit-recap",
 	"version": "1.0.0",
-	"description": "NestJSプロジェクトの構造変化をレポートするCLIツール",
+	"description": "設計意思決定の週次キャッチアップレポートを生成するCLIツール",
 	"type": "module",
-	"main": "./dist/index.js",
 	"bin": {
-		"commit-recap": "./dist/index.js",
-		"design-catchup": "./dist/design-decisions/index.js",
-		"collect-design-data": "./dist/design-decisions/collect-cli.js",
-		"generate-design-report": "./dist/design-decisions/generate-cli.js"
+		"design-catchup": "./dist/index.js",
+		"collect-design-data": "./dist/collect-cli.js",
+		"generate-design-report": "./dist/generate-cli.js"
 	},
 	"scripts": {
-		"dev": "tsx src/index.ts",
-		"start": "node dist/index.js",
 		"build": "tsup",
 		"typecheck": "tsc --noEmit",
 		"format": "biome format --write .",
@@ -24,10 +20,10 @@
 		"design:generate": "tsx src/design-decisions/generate-cli.ts"
 	},
 	"keywords": [
-		"nestjs",
-		"git",
-		"report",
-		"cli"
+		"design",
+		"ai",
+		"weekly-report",
+		"nestjs"
 	],
 	"author": "",
 	"license": "MIT",
