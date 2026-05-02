@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import chalk from "chalk";
