@@ -1,143 +1,136 @@
-# commit-recap
+# nest-recap
 
-**週次設計レビューを自動化するGitHub Actionsツール**
+**Claude Code スラッシュコマンド + GitHub Actions で週次設計レビューを自動化するツール**
 
-NestJSプロジェクトのリポジトリに設置することで、設計に影響する変更をドメイン別に整理したレポートを週次で自動生成し、Issueとして投稿します。CTOや設計レビュアーが設計意思決定をキャッチアップするために最適化されています。
+NestJS / TypeORM プロジェクトの直近の変更を解析し、設計に影響する変更をドメイン別に整理した Markdown レポートを生成します。CTO や設計レビュアーが設計意思決定をキャッチアップするために最適化されています。
 
-## Weekly Design Catchup - GitHub Actions自動実行
+実体は **1 つの Claude Code スラッシュコマンド** (`.claude/commands/nest-recap.md`) です。同じコマンドを以下の 2 通りで実行できます:
 
-設計意思決定レポートを GitHub Actions で週次自動生成し、Issue として投稿する機能です。
+- **ローカル**: Claude Code から `/nest-recap --days 7` で実行
+- **GitHub Actions**: 自己完結型ワークフロー (`weekly-nest-recap.yml`) を target repo に 1 ファイル配置するだけで週次自動実行
 
-### やること
+Node.js / npm / ts-morph などのランタイム依存は持ちません。エンティティ/DTO 解析を含むすべての処理を Claude が直接 Read / Bash / Grep で行います。
 
-- **週1回の自動実行**でレポートを生成
-- 生成されたレポートを自動的に **Issue として投稿**
-- commit-recap リポジトリのワークフローを再利用（設定ファイルの更新に自動対応）
-- **設計に影響する変更を自動抽出**: DB スキーマ、API エンドポイント、ドメインモデル等の重要な変更のみを対象
-- **ドメイン別に整理**: 変更をドメイン/コンテキストごとに分類して表示
-- **意思決定を4つの観点で整理**:
-  - 確定したビジネスルール
-  - データ構造の変化
-  - 責務・境界の変化
-  - 新たな概念・用語
+---
 
-### セットアップ方法
+## GitHub Actions での自動実行（推奨）
 
-1. 対象リポジトリの Secrets に `ANTHROPIC_API_KEY` を設定
-2. このリポジトリの `weekly-design-catchup.yml` を対象リポジトリの `.github/workflows/` にコピー
-3. コピーしたファイル内の `schedule` の cron 式を必要に応じて書き換え（デフォルト: 毎週金曜日 JST 12:00）
-
-詳細は [GitHub Actions 統合ガイド](./docs/github-actions-integration.md) を参照してください。
-
-### 対象となる変更
-
-以下のカテゴリに該当する変更が抽出されます:
-
-- **DB スキーマ変更**: migration、schema定義、.prisma、.sqlファイル
-- **API エンドポイント**: controller、route、api関連ファイル
-- **ドメインモデル・エンティティ**: entity、domain、model関連ファイル
-- **状態管理・データフロー**: store、state、redux、zustand等
-- **外部サービス連携**: integration、external、service、client関連ファイル
-- **リファクタリング**: 責務の再分割・抽象化を伴う変更
-
-### 除外される変更
-
-- ライブラリバージョン更新のみ
-- テキスト・コピーの修正
-- スタイル・フォーマットのみ
-- CI/CDの軽微な調整
-- テストファイルのみの変更
-
-## ローカルでのCLI実行（開発・デバッグ用）
-
-GitHub Actionsを使わず、ローカルでレポートを生成することも可能です。
+設計意思決定レポートを週次で自動生成し、Issue として投稿します。
 
 ### セットアップ
 
-```bash
-# 依存関係のインストール
-npm install
+1. **`ANTHROPIC_API_KEY` を Secrets に追加**
+   - 対象リポジトリの **Settings → Secrets and variables → Actions**
+   - **New repository secret** で `ANTHROPIC_API_KEY` を登録
+
+2. **ワークフローファイルを配置**
+   - 本リポジトリの [`weekly-nest-recap.yml`](./weekly-nest-recap.yml) を対象リポジトリの `.github/workflows/weekly-nest-recap.yml` にコピー（**この 1 ファイルのみ**）
+   - 必要に応じて `cron` 式を書き換え（デフォルト: 毎週金曜日 JST 12:00）
+   - コミット & プッシュで有効化
+
+3. **手動実行（オプション）**
+   - 対象リポジトリの **Actions** タブ → **Weekly nest-recap** → **Run workflow**
+
+詳細は [GitHub Actions 統合ガイド](./docs/github-actions-integration.md) を参照してください。
+
+### 仕組み
+
+```
+[target repo] schedule/dispatch → weekly-nest-recap.yml (自己完結)
+                                   ├─ target repo を checkout
+                                   ├─ nestjs-commit-recap から .claude/commands/nest-recap.md を sparse-checkout
+                                   ├─ target repo の .claude/commands/ に配置
+                                   ├─ anthropics/claude-code-action@v1 で /nest-recap を実行
+                                   │   └─ Claude が git/gh/Read/Grep でデータ収集 → エンティティ差分抽出 → レポート生成
+                                   └─ 生成された Markdown を Issue として投稿
 ```
 
-### 基本的な使い方
+ワークフローファイルには **`npm` ステップは一切登場しません**。再利用可能ワークフロー (`workflow_call`) は使わず、target repo に 1 ファイル丸ごとコピーする方式です。スラッシュコマンド (`nest-recap.md`) はワークフロー実行時に sparse-checkout で取得するため、target repo にコミットする必要はありません。
 
-1コマンドでデータ収集からレポート生成まで実行します:
+---
 
-```bash
-# 環境変数の設定
-export ANTHROPIC_API_KEY=sk-ant-...
+## ローカルでの実行
 
-# 開発モード（推奨）
-npm run design -- <repo-path> -d 7
+Claude Code をインストール済みの環境で、対象リポジトリのルートで以下を実行します。
 
-# ビルド後
-design-catchup <repo-path> -d 7
-```
-
-**オプション**:
-- `-d, --days <number>`: 期間（日数、デフォルト: 7）
-- `-o, --output <path>`: 出力ファイルパス（デフォルト: ./reports/weekly-design-catchup-YYYYMMDD.md）
-- `--save-data <path>`: 収集データをJSONとして保存（デバッグ用）
-- `--api-key <key>`: Anthropic APIキー（環境変数より優先）
-- `--verbose`: 詳細ログを表示
-
-### 実行例
+### 初回セットアップ（プロジェクトごと 1 回）
 
 ```bash
-# 基本的な実行（カレントディレクトリを対象）
-npm run design -- . -d 7
-
-# 別のリポジトリを対象に実行
-npm run design -- /path/to/another/repo -d 14
-
-# 収集データも保存して確認したい場合
-npm run design -- . -d 7 --save-data ./debug-data.json --verbose
+# 対象リポジトリのルートで
+mkdir -p .claude/commands
+curl -fsSL https://raw.githubusercontent.com/Everforth/nestjs-commit-recap/main/.claude/commands/nest-recap.md \
+  -o .claude/commands/nest-recap.md
 ```
 
-### 2段階での実行（デバッグ用）
+または本リポジトリを clone してファイルをコピーしても構いません。
 
-データ収集とレポート生成を別々に実行することも可能です:
+### 実行
 
-**1. データ収集**
 ```bash
-npm run design:collect <repo-path> -d 7 -o ./design-data.json
+# Claude Code を起動して
+> /nest-recap --days 7
 ```
 
-**2. レポート生成**
-```bash
-npm run design:generate ./design-data.json -o ./reports
-```
+引数:
 
-**3. 別のリポジトリパスでレポート生成**
-```bash
-# 収集時とは別のリポジトリを参照してレポート生成
-npm run design:generate ./design-data.json -r /path/to/another/repo -o ./reports
-```
+- `--days <n>`: 解析対象期間（日数）。デフォルト `7`
+- `--output <path>`: 出力 Markdown のパス。デフォルト `reports/weekly-nest-recap-YYYYMMDD.md`
+
+実行が完了すると `Report written to: <path>` が表示されます。
+
+---
+
+## 抽出対象
+
+スラッシュコマンド (`.claude/commands/nest-recap.md`) は以下を抽出・整理します。
+
+### 対象となる変更
+
+- **DB スキーマ** (`*.entity.ts` の追加/削除/カラム・リレーション・インデックス・FK 変更)
+- **API エンドポイント** (`*.controller.ts` のルート変更)
+- **ドメインモデル** (`*.service.ts` / domain 層の責務移動)
+- **状態管理・データフロー**
+- **外部サービス連携**
+- **設計を変えるリファクタリング**
+
+### 除外される変更
+
+- 依存パッケージのバージョン更新のみ
+- フォーマット・lint 修正のみ
+- テキスト・コピー修正のみ
+- ファイル移動のみ（責務変更を伴わない）
+- テストのみの変更
+- DTO ファイル (`*.dto.ts`) はコンテキスト理解には使うが**レポート出力には含めない**
+
+### レポート構成
+
+エンティティ変更が**ある場合**は 3 セクション + 補足、**ない場合**は 2 セクション + 補足:
+
+1. 責務・境界の変化
+2. この設計が前提としていること
+3. データ構造の変化（Entity 変更がある場合のみ）
+4. その他補足（Nest.js ベストプラクティス違反などを含む）
+
+---
 
 ## 必須要件
 
-- Node.js 18以上
-- Git
-- **Anthropic APIキー**: AI分析機能を使用する場合に必要（[Console](https://console.anthropic.com/)から取得）
-- **GitHub CLI (gh)**: PR本文を取得してAI分析の精度を向上させるために推奨
-  - インストール: `brew install gh` (macOS) / [GitHub CLI](https://cli.github.com/)
-  - 認証: `gh auth login`
+- **対象リポジトリ**: Git で管理されていること
+- **CI 実行時**: `ANTHROPIC_API_KEY` Secret、`GITHUB_TOKEN`（GitHub Actions が自動付与）
+- **ローカル実行時**: Claude Code, `git`, `gh` CLI（PR メタデータ取得のため）
 
-## 環境変数
+Node.js / npm / TypeScript ツールチェーンは **不要** です。
 
-| 変数名 | 説明 | 必須 |
-|-------|------|------|
-| `ANTHROPIC_API_KEY` | Anthropic APIキー（AI分析機能用） | オプション |
+---
 
-## 技術スタック
+## ドキュメント
 
-| パッケージ | 用途 |
-|-----------|------|
-| commander | CLIフレームワーク |
-| simple-git | Git操作 |
-| chalk | ターミナル色付け |
-| ora | プログレススピナー |
-| @anthropic-ai/sdk | Anthropic API（AI分析機能） |
-| dotenv | 環境変数読み込み |
-| tsup | ESMビルド |
-| tsx | 開発時実行 |
+- [GitHub Actions 統合ガイド](./docs/github-actions-integration.md)
+- [作業記録 (`docs/work_log/`)](./docs/work_log/)
+- [スラッシュコマンド本体 (`.claude/commands/nest-recap.md`)](./.claude/commands/nest-recap.md)
+
+---
+
+## ライセンス
+
+社内利用想定。
