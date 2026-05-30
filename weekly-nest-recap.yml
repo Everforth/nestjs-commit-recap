@@ -1,0 +1,118 @@
+name: Weekly nest-recap
+
+# nest-recap の週次設計意思決定キャッチアップワークフロー
+# このファイル 1 つを `.github/workflows/` にコピーすれば動きます。
+# `.claude/commands/nest-recap.md` は実行時に nestjs-commit-recap リポジトリから sparse-checkout で取得します。
+
+on:
+  # JST 12:00 毎週金曜日に実行（UTC では -9 時間）
+  schedule:
+    - cron: '0 3 * * 5'
+
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Number of days to analyze'
+        required: false
+        type: number
+        default: 7
+      issue_labels:
+        description: 'Comma-separated list of labels to add to the issue'
+        required: false
+        type: string
+        default: 'design-review,weekly-report,automated'
+
+jobs:
+  generate-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch nest-recap slash command
+        uses: actions/checkout@v4
+        with:
+          repository: Everforth/nestjs-commit-recap
+          ref: main
+          path: .nest-recap-tool
+          sparse-checkout: |
+            .claude/commands
+          sparse-checkout-cone-mode: false
+
+      - name: Install slash command into target repo
+        run: |
+          mkdir -p .claude/commands
+          cp .nest-recap-tool/.claude/commands/nest-recap.md .claude/commands/
+          rm -rf .nest-recap-tool
+
+      - name: Resolve output path
+        id: paths
+        run: |
+          REPORT_DATE=$(date +%Y%m%d)
+          OUTPUT_PATH="reports/weekly-nest-recap-${REPORT_DATE}.md"
+          mkdir -p reports
+          echo "output_path=${OUTPUT_PATH}" >> "$GITHUB_OUTPUT"
+          echo "report_date=${REPORT_DATE}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate nest-recap report
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: "/nest-recap --days ${{ github.event.inputs.days || '7' }} --output ${{ steps.paths.outputs.output_path }}"
+          claude_args: "--allowed-tools Bash,Read,Write,Grep,Glob --max-turns 60"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify report was generated
+        run: |
+          if [ ! -f "${{ steps.paths.outputs.output_path }}" ]; then
+            echo "Error: Report file not found at ${{ steps.paths.outputs.output_path }}"
+            exit 1
+          fi
+          echo "Report generated at ${{ steps.paths.outputs.output_path }}"
+
+      - name: Create Issue with report
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+
+            const reportPath = '${{ steps.paths.outputs.output_path }}';
+            const reportDate = '${{ steps.paths.outputs.report_date }}';
+            const days = '${{ github.event.inputs.days || '7' }}';
+            const labelsInput = '${{ github.event.inputs.issue_labels || 'design-review,weekly-report,automated' }}';
+
+            const reportContent = fs.readFileSync(reportPath, 'utf8');
+
+            const issueTitle = `週次設計意思決定キャッチアップ (${reportDate.substring(0,4)}/${reportDate.substring(4,6)}/${reportDate.substring(6,8)})`;
+
+            const issueBody = `${reportContent}
+
+            ---
+
+            **自動生成レポート**: このレポートは [nest-recap](https://github.com/Everforth/nestjs-commit-recap) の \`/nest-recap\` スラッシュコマンドにより自動生成されました。
+            **生成日時**: ${new Date().toISOString()}
+            **対象期間**: 過去 ${days} 日間`;
+
+            const labels = labelsInput.split(',').map(l => l.trim()).filter(l => l.length > 0);
+
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issueTitle,
+              body: issueBody,
+              labels: labels
+            });
+
+            console.log(`Issue created: ${issue.data.html_url}`);
+            core.summary.addRaw(`Issue created: [#${issue.data.number}](${issue.data.html_url})`);
+            await core.summary.write();
